@@ -160,6 +160,36 @@ export async function addToBoard(boardPath: string, clusterId: string, notePath:
  * Ctrl+K "Give every note an ID": notes made before notes had ids get one (an `id:` line in their
  * front matter), and copies sharing another note's id get their own. Asks first; nothing else changes.
  */
+/** Ctrl+K "Add example notes": one note for each thing the app does, then opens the first. */
+export async function addExampleNotes(): Promise<void> {
+  try {
+    const { added, kept } = await api.addExamples(localISODate());
+    await refreshNotes();
+    showToast(added.length ? `Added ${added.length} example files${kept.length ? ` (${kept.length} were there already)` : ''}.` : 'The examples are all there already.');
+    navigate(noteHref('notes/examples/start-here.md'));
+  } catch (err) {
+    showToast(`Could not add the examples: ${messageOf(err)}`, 'error');
+  }
+}
+
+/** Ctrl+K "Remove example notes": moves them to the trash. */
+export async function removeExampleNotes(): Promise<void> {
+  const ok = await askConfirm({
+    title: 'Remove the example notes?',
+    message: 'The example notes, board, dashboard, paper and picture move to the trash, including any changes you made to them. Your own notes stay as they are.',
+    confirmLabel: 'Remove',
+  });
+  if (!ok) return;
+  try {
+    const { removed } = await api.removeExamples();
+    await refreshNotes();
+    showToast(removed.length ? `Moved ${removed.length} example files to the trash.` : 'There were no examples to remove.');
+    navigate('/');
+  } catch (err) {
+    showToast(`Could not remove the examples: ${messageOf(err)}`, 'error');
+  }
+}
+
 export async function giveNotesIds(): Promise<void> {
   try {
     const { notes, missing, copies } = await api.noteIdStatus();

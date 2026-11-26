@@ -92,6 +92,8 @@ function form(fields: Record<string, string | Blob>): FormData {
 
 export const api = {
   notes: () => call<NoteSummary[]>('GET', '/api/notes'),
+  addExamples: (today: string) => call<{ added: string[]; kept: string[] }>('POST', `/api/examples?today=${today}`),
+  removeExamples: () => call<{ removed: string[] }>('DELETE', '/api/examples'),
   syncStatus: () => call<SyncStatus>('GET', '/api/sync'),
   syncConnect: (appKey: string, code: string, verifier: string) => call<SyncStatus>('POST', '/api/sync/connect', { appKey, code, verifier }),
   syncDisconnect: () => call<SyncStatus>('DELETE', '/api/sync/connect'),

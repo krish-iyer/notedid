@@ -4271,3 +4271,20 @@ button.tag-chip:hover:not(:disabled) {
 .sync-conflicts {
   padding-left: 1.2em;
 }
+
+/* ---- The example notes, offered in an empty app ---- */
+.new-here {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6em 1em;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+  padding: 0.75em 1em;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.new-here p {
+  flex: 1 1 22rem;
+  margin: 0;
+}

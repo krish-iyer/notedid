@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { NoteSummary } from '../../shared/api.ts';
 import { fuzzyFilter, type FuzzyMatch } from '../../shared/fuzzy.ts';
-import { captureToToday, createBoard, createDashboard, createNote, exportNotes, giveNotesIds, importNotes } from '../actions.ts';
+import { addExampleNotes, captureToToday, createBoard, createDashboard, createNote, exportNotes, giveNotesIds, importNotes, removeExampleNotes } from '../actions.ts';
 import { syncNow } from '../sync.ts';
 import { navigate, noteHref } from '../router.ts';
 import { useNotes } from '../stores.ts';
@@ -35,6 +35,12 @@ const ARCHIVE: Item[] = [
   { kind: 'action', id: 'import-zip', icon: 'folder', label: 'Import notes from a .zip…', run: () => void importNotes('zip') },
 ];
 
+/** The example notes. */
+const EXAMPLES: Item[] = [
+  { kind: 'action', id: 'examples-add', icon: 'notes', label: 'Add example notes', run: () => void addExampleNotes() },
+  { kind: 'action', id: 'examples-remove', icon: 'trash', label: 'Remove example notes', run: () => void removeExampleNotes() },
+];
+
 /** Syncing with Dropbox. */
 const SYNC: Item[] = [
   { kind: 'action', id: 'sync-now', icon: 'sync', label: 'Sync now', run: () => void syncNow() },
@@ -62,6 +68,7 @@ export function Switcher({ onClose }: { onClose: () => void }) {
         { kind: 'action', id: 'note-ids', icon: 'check', label: 'Give every note an ID', run: () => void giveNotesIds() },
         ...ARCHIVE,
         ...SYNC,
+        ...EXAMPLES,
       ];
     }
     const found = fuzzyFilter(notes, q, noteLabel, 30).map(({ item, match }): Item => ({ kind: 'note', note: item, match }));
@@ -75,6 +82,7 @@ export function Switcher({ onClose }: { onClose: () => void }) {
       : [];
     if (/^(export|import|backup|zip)/i.test(q)) commands.push(...ARCHIVE);
     if (/^(sync|dropbox)/i.test(q)) commands.push(...SYNC);
+    if (/^(example|demo|sample|tour|help)/i.test(q)) commands.push(...EXAMPLES);
     if (/^(give|ids?\b|note ids?)/i.test(q)) commands.push({ kind: 'action', id: 'note-ids', icon: 'check', label: 'Give every note an ID', run: () => void giveNotesIds() });
     const exact = notes.some((n) => n.title.toLowerCase() === q.toLowerCase());
     const actions: Item[] = [

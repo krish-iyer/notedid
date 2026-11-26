@@ -72,6 +72,8 @@ A few things differ in the browser-only app:
 
 ## What it does
 
+**Examples.** Ctrl+K → **Add example notes** adds a note for each of the things below, with real content to try them on: tasks due around today, tables, cards, a project board, a dashboard, a paper with its PDF, comments, and a start page linking them all. An app with no notes offers them on Today. They're ordinary notes tagged `#example`, and Ctrl+K → **Remove example notes** moves them to the trash. Adding them never replaces a file you have.
+
 **Capture.** Today's journal note is the home screen. Press **Ctrl+K** anywhere to find any note. In that box, **Shift+Enter** creates a note from what you typed, and **Alt+Enter** adds it to today. In the editor:
 
 - `[]` followed by a space makes a task.

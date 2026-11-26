@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { addDays, formatDayTitle, journalPath } from '../../shared/dates.ts';
-import { deleteNote, renameNote, togglePin } from '../actions.ts';
+import { addExampleNotes, deleteNote, renameNote, togglePin } from '../actions.ts';
 import { api } from '../api.ts';
 import { AddToBoard } from '../components/AddToBoard.tsx';
 import { Icon } from '../components/Icon.tsx';
@@ -10,7 +10,7 @@ import { TaskRow } from '../components/TaskRow.tsx';
 import { useLiveData, useToday } from '../hooks.ts';
 import type { SaveStatus } from '../noteSession.ts';
 import { encodeNotePath, Link, navigate, noteHref } from '../router.ts';
-import { useNote, useSettings } from '../stores.ts';
+import { useNote, useNotes, useNotesLoaded, useSettings } from '../stores.ts';
 
 function titleFromPath(path: string): string {
   return (path.split('/').pop() ?? path).replace(/\.md$/i, '').replace(/-/g, ' ');
@@ -86,6 +86,24 @@ export function NotePage({ path, anchor }: { path: string; anchor: string | null
 }
 
 /** Open tasks due today or earlier, on today's journal page. */
+/** In an app with no notes yet: the example notes, one for each thing the app does. */
+function NewHere() {
+  const loaded = useNotesLoaded();
+  const notes = useNotes();
+  if (!loaded || notes.length > 0) return null;
+  return (
+    <section className="new-here" aria-label="New here">
+      <p>
+        New here? The example notes show what notedid does, one thing each: tasks, tables, cards, a board, a dashboard, a paper with its PDF, and more. They're ordinary notes, and
+        Ctrl+K → <i>Remove example notes</i> takes them away again.
+      </p>
+      <button type="button" className="primary" onClick={() => void addExampleNotes()}>
+        Add example notes
+      </button>
+    </section>
+  );
+}
+
 function DueToday({ today }: { today: string }) {
   const { data } = useLiveData(() => api.tasks(today), [today]);
   const due = (data ?? []).filter((t) => !t.done && t.due !== null && t.due <= today);
@@ -139,6 +157,7 @@ export function JournalPage({ date, anchor }: { date: string; anchor?: string | 
             <SaveBadge status={status} />
           </p>
         </header>
+        {isToday && <NewHere />}
         {isToday && <DueToday today={today} />}
         <NoteEditorPane
           path={path}

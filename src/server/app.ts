@@ -9,6 +9,7 @@ import { parseQuery } from '../shared/query.ts';
 import { slugify, tagify } from '../shared/slug.ts';
 import { exportZip, importZip } from './archive.ts';
 import { DropboxError } from './dropbox.ts';
+import { addExamples, removeExamples } from './examples.ts';
 import type { EventHub } from './events.ts';
 import type { GitBackup } from './git.ts';
 import type { NoteIndex } from './noteIndex.ts';
@@ -302,6 +303,11 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     ctx.events.emit({ type: 'vault' });
     return c.json(result);
   });
+
+  // ---- Example notes: one for each thing the app does ----------------------------------------------
+
+  app.post('/api/examples', async (c) => c.json(await addExamples(ctx.store, ctx.notes, todayFrom(c.req.query('today')))));
+  app.delete('/api/examples', async (c) => c.json(await removeExamples(ctx.store, ctx.notes)));
 
   // ---- Sync with Dropbox --------------------------------------------------------------------------
 
