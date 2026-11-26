@@ -1,4 +1,5 @@
 import { EVENTS_CHANNEL, type ServerEvent } from '../shared/api.ts';
+import { appUrl } from './router.ts';
 
 type Listener = (event: ServerEvent) => void;
 
@@ -16,7 +17,7 @@ function connect(): void {
     source = channel;
     return;
   }
-  const events = new EventSource('/api/events');
+  const events = new EventSource(appUrl('/api/events'));
   source = events;
   events.addEventListener('change', (message) => {
     let event: ServerEvent;

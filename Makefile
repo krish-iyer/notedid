@@ -2,6 +2,7 @@
 #
 #   make dev      start the app at http://localhost:4322 (Ctrl-C stops it)
 #   make browser  build the browser-only app and serve it at http://localhost:4323 (notes stay in the browser)
+#   make browser-dist  build the browser-only app into dist/browser, to host anywhere (BASE_PATH=/folder/ for a folder)
 #   make start    start the app in the background; `make logs` follows its output
 #   make down     stop and remove the app container
 #   make check    type-check, run the tests and build
@@ -18,7 +19,7 @@ RUN := $(COMPOSE) run --rm dev
 DEPS := node_modules/.package-lock.json
 SETUP := .env $(NOTES_HOST_DIR)
 
-.PHONY: dev start logs check test typecheck build browser shell down image
+.PHONY: dev start logs check test typecheck build browser browser-dist shell down image
 
 dev: $(DEPS) | $(SETUP)
 	$(COMPOSE) up dev
@@ -47,6 +48,11 @@ BROWSER_PORT ?= 4323
 browser: $(DEPS) | $(SETUP)
 	$(COMPOSE) run --rm -p "127.0.0.1:$(BROWSER_PORT):$(BROWSER_PORT)" -e WEB_HOST=0.0.0.0 -e BROWSER_PORT=$(BROWSER_PORT) dev \
 		sh -c "npm run build:browser && npm run preview:browser"
+
+# The same as static files in dist/browser. Served from a folder (https://you.github.io/notedid/)? make browser-dist BASE_PATH=/notedid/
+BASE_PATH ?= /
+browser-dist: $(DEPS) | $(SETUP)
+	$(COMPOSE) run --rm -e BASE_PATH=$(BASE_PATH) dev npm run build:browser
 
 shell: | $(SETUP)
 	$(RUN) bash

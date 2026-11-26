@@ -9,18 +9,21 @@ import { defineConfig } from 'vite';
  * offline use, and a build name for its cache.
  */
 const OUT = 'dist/browser';
+/** Where the app is served from (see vite.browser.config.ts). */
+const BASE = process.env.BASE_PATH || '/';
 
+/** The app's files, relative to OUT ("assets/index-….js"). */
 function appFiles(): string[] {
   const found: string[] = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
-      else found.push(`/${path.relative(OUT, full).split(path.sep).join('/')}`);
+      else found.push(path.relative(OUT, full).split(path.sep).join('/'));
     }
   };
   walk(OUT);
-  return found.filter((file) => file !== '/sw.js').sort();
+  return found.filter((file) => file !== 'sw.js').sort();
 }
 
 export default defineConfig(() => {
@@ -28,10 +31,11 @@ export default defineConfig(() => {
   const build = createHash('sha256');
   for (const file of files) build.update(file).update(readFileSync(path.join(OUT, file)));
   return {
+    base: BASE,
     define: {
       // A classic script has no import.meta; the worker's own address does its job (SQLite finds its files with it).
       'import.meta.url': 'self.location.href',
-      __APP_FILES__: JSON.stringify(files),
+      __APP_FILES__: JSON.stringify(files.map((file) => `${BASE}${file}`)),
       __BUILD__: JSON.stringify(build.digest('hex').slice(0, 12)),
     },
     build: {

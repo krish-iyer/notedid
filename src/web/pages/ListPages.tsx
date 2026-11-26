@@ -8,7 +8,7 @@ import { Icon } from '../components/Icon.tsx';
 import { TaskRow, taskLabel } from '../components/TaskRow.tsx';
 import { Matched, Snippet } from '../components/Text.tsx';
 import { useDebounced, useLiveData, useToday } from '../hooks.ts';
-import { Link, navigate, noteHref } from '../router.ts';
+import { currentHref, Link, navigate, noteHref } from '../router.ts';
 import { useNotes, useNotesLoaded } from '../stores.ts';
 import { timeAgo } from '../util.ts';
 
@@ -33,7 +33,7 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
 
   useEffect(() => {
     const target = debounced.trim() ? `/search?q=${encodeURIComponent(debounced)}` : '/search';
-    if (location.pathname + location.search !== target) navigate(target, { replace: true });
+    if (currentHref() !== target) navigate(target, { replace: true });
   }, [debounced]);
 
   return (

@@ -2,7 +2,7 @@
 
 notedid is a personal notes app: plain markdown files, quick capture, fast search, papers with PDF highlights, project boards, and an encrypted vault. Your notes are ordinary files in a folder you choose. It runs with a small server in Docker, or entirely in a browser.
 
-[docs/SPEC.md](docs/SPEC.md) has the design and the milestones. Milestones 1–5 are built; the phone milestone and AI features are postponed.
+[docs/SPEC.md](docs/SPEC.md) has the design and the milestones. Milestones 1–5 are built, and the app also runs without a server, syncs through Dropbox and installs on phones. AI features are postponed.
 
 ## Run it
 
@@ -23,7 +23,7 @@ Notes go to `dev-notes/` in this folder (gitignored). To use a real notes folder
 make start NOTES_HOST_DIR=$HOME/notes
 ```
 
-The app is published on this machine's localhost only, because there is no login yet. Login comes with the phone milestone, which is postponed. The first `make` writes a gitignored `.env` with your uid, gid and time zone.
+The Docker version is published on this machine's localhost only, because it has no login. On a phone, use the browser-only app below. The first `make` writes a gitignored `.env` with your uid, gid and time zone.
 
 ### Without a server: the browser-only app
 
@@ -43,6 +43,15 @@ Open **Sync** in the sidebar to sync your notes through your Dropbox, in the bro
 - A note changed on two devices is merged line by line. If both changed the same lines, the newer text stays and the other goes into the note's History (the Sync screen lists such notes).
 - A change wins over a deletion. If a sync would delete many files on Dropbox at once (because this browser lost its storage, say), it asks first, and can bring them back instead.
 - Disconnecting deletes nothing, here or on Dropbox.
+
+### On your phone
+
+The browser-only app installs like an app, on phones and computers, and works offline. A phone needs it served over HTTPS from somewhere, and as it is plain static files, free static hosting does:
+
+- **GitHub Pages:** push this repository to GitHub and, in its **Settings → Pages**, pick **GitHub Actions** as the source. The workflow in `.github/workflows/pages.yml` then tests and publishes the app at `https://<you>.github.io/<repository>/` on every push to `main`. On a free GitHub plan the repository has to be public; it holds the app's code only, never your notes.
+- **Anywhere else** (Netlify, Cloudflare Pages, a server of yours): `make browser-dist` builds it into `dist/browser/` to upload. Served from a folder (`https://example.com/notes/`)? Build with `make browser-dist BASE_PATH=/notes/`.
+
+Then open the address on the phone and install it: on an iPhone or iPad, Safari's **Share → Add to Home Screen**; on Android, Chrome's menu → **Install app** (or **Add to home screen**). Open **Sync** there and connect it with the same Dropbox app key: the first sync brings all your notes. The host only serves the app; your notes stay on your devices and in your Dropbox.
 
 A few things differ in the browser-only app:
 

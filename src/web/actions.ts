@@ -5,7 +5,7 @@ import { tagify } from '../shared/slug.ts';
 import { api, fetchNote, SaveConflict, saveNote } from './api.ts';
 import { askConfirm, askText } from './dialogs.ts';
 import { appendToEditor } from './editor/registry.ts';
-import { navigate, noteHref } from './router.ts';
+import { appUrl, navigate, noteHref } from './router.ts';
 import { refreshNotes, resolveNote, updateSettings } from './stores.ts';
 import { showToast } from './toast.ts';
 import { messageOf, randomId } from './util.ts';
@@ -191,7 +191,7 @@ export async function giveNotesIds(): Promise<void> {
 export async function exportNotes(): Promise<void> {
   try {
     showToast('Making the zip…');
-    const response = await fetch('/api/export');
+    const response = await fetch(appUrl('/api/export'));
     if (!response.ok) throw new Error(`the app answered ${response.status}`);
     const url = URL.createObjectURL(await response.blob());
     const link = document.createElement('a');

@@ -4,7 +4,7 @@ import type { SyntaxNode } from '@lezer/common';
 import { isISODate } from '../../shared/dates.ts';
 import { parseWikiTarget, safeDecodeURI } from '../../shared/markdown.ts';
 import { api, fileUrl } from '../api.ts';
-import { encodeNotePath, navigate, noteHref } from '../router.ts';
+import { currentHref, encodeNotePath, navigate, noteHref } from '../router.ts';
 import { refreshNotes, resolveNote } from '../stores.ts';
 import { showToast } from '../toast.ts';
 import { dirname, joinPath, messageOf } from '../util.ts';
@@ -63,7 +63,7 @@ function openPdf(reference: string, hash: string): void {
     return;
   }
   const paperUrl = `/paper/${encodeNotePath(paper.path)}`;
-  if (location.pathname === paperUrl) {
+  if (currentHref().split('?')[0] === paperUrl) {
     window.dispatchEvent(new CustomEvent<PdfLocation>(PDF_LOCATION_EVENT, { detail: { paperPath: paper.path, page, highlight } }));
     return;
   }

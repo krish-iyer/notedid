@@ -16,6 +16,7 @@ import type {
   TaskItem,
   VaultBlobInfo,
 } from '../shared/api.ts';
+import { appUrl } from './router.ts';
 
 /** The note changed on disk since the version the save was based on. */
 export class SaveConflict extends Error {
@@ -54,7 +55,7 @@ async function errorFrom(res: Response): Promise<ApiError> {
 /** A request to the API. `body` goes as JSON, except form data and files (Blob), which go as they are. */
 async function call<T>(method: string, url: string, body?: unknown, init: RequestInit = {}): Promise<T> {
   const raw = body instanceof FormData || body instanceof Blob;
-  const res = await fetch(url, {
+  const res = await fetch(appUrl(url), {
     method,
     ...init,
     headers: body === undefined || raw ? init.headers : { 'content-type': 'application/json', ...init.headers },
@@ -80,7 +81,7 @@ export async function saveNote(request: SaveNoteRequest, options: { keepalive?: 
 }
 
 export function fileUrl(path: string): string {
-  return `/api/file?path=${q(path)}`;
+  return appUrl(`/api/file?path=${q(path)}`);
 }
 
 function form(fields: Record<string, string | Blob>): FormData {

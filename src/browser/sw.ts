@@ -14,6 +14,8 @@ declare const __APP_FILES__: string[];
 declare const __BUILD__: string;
 
 const CACHE = `notesapp-${__BUILD__}`;
+/** Where the app is served from ('/', or a folder such as '/notedid/'): the worker's scope. */
+const BASE = new URL(self.registration.scope).pathname;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -39,7 +41,10 @@ let backend: Promise<Backend> | null = null;
 async function api(request: Request): Promise<Response> {
   try {
     backend ??= startBackend();
-    return await (await backend).app.fetch(request);
+    // The backend's routes are /api/…, wherever the app is served from.
+    const url = new URL(request.url);
+    const routed = BASE === '/' ? request : new Request(`${url.origin}/${url.pathname.slice(BASE.length)}${url.search}`, request);
+    return await (await backend).app.fetch(routed);
   } catch (err) {
     backend = null;
     const message = err instanceof Error ? err.message : String(err);
@@ -54,7 +59,7 @@ async function appFile(request: Request): Promise<Response> {
   if (hit) return hit;
   // Any page of the app (/note/…, /day/…) is index.html; the app shows the right one.
   if (request.mode === 'navigate') {
-    const page = await cache.match('/index.html');
+    const page = await cache.match(`${BASE}index.html`);
     if (page) return page;
   }
   const response = await fetch(request);
@@ -65,7 +70,7 @@ async function appFile(request: Request): Promise<Response> {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/api/')) {
+  if (url.pathname.startsWith(`${BASE}api/`)) {
     const response = api(event.request);
     event.respondWith(response);
     // A browser stops an idle worker after half a minute or so: after a change, stay until the notes'

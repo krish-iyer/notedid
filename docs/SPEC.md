@@ -1,6 +1,6 @@
 # notedid: spec
 
-Status: milestones 1–5 built (2026-11-25). The phone milestone and AI are postponed. §15 lists where the build differs from this plan.
+Status: milestones 1–5 built (2026-11-25). The phone milestone took another road (2026-11-26): instead of a server on the home network with a login, the app runs in the browser, syncs through Dropbox and installs on phones (§15). AI is postponed. §15 lists where the build differs from this plan.
 
 ## 1. What we're building
 
@@ -259,7 +259,7 @@ The vault is end-to-end encrypted in the browser. The server only ever stores ci
 | M3 | **Papers** | The PDF viewer, highlights and comments, arXiv/DOI import, and comments on markdown documents all work. |
 | M4 | **Project boards** | Board files, card types, drag and drop, and the tray all work. |
 | M5 | **Vault** | The vault works as described in §11. |
-| later | **Phone and home network** (postponed 2026-11-25) | Login, HTTPS via Caddy, the installable app, a capture screen, the offline outbox, share to notes (Android share target, iPhone Shortcut) and the `note` CLI all work, with the app and Caddy in Docker Compose. |
+| later | **Phone and home network** (replaced 2026-11-26 by the browser-only app, Dropbox sync and installing it; §15) | Login, HTTPS via Caddy, the installable app, a capture screen, the offline outbox, share to notes (Android share target, iPhone Shortcut) and the `note` CLI all work, with the app and Caddy in Docker Compose. |
 | later | **AI**, only after M5 | - An MCP connector that can only add and create, with every write its own git commit.<br>- "Tidy": the AI proposes structure and you accept or reject a diff. |
 
 M3 to M5 can be reordered. If the vault is needed sooner, move M5 up.
@@ -287,7 +287,7 @@ M3 to M5 can be reordered. If the vault is needed sooner, move M5 up.
 
 ## 15. Build notes (2026-11-25)
 
-Built: milestones 1–5. Postponed: the phone milestone (§7) and AI.
+Built: milestones 1–5, and in place of the phone milestone (§7): the browser-only app, Dropbox sync and installing it on phones. Postponed: AI.
 
 Where the build differs from the plan above:
 
@@ -331,6 +331,7 @@ Added after the first review (2026-11-25):
   - Deleting more than 10 files on Dropbox, and more than a quarter of what was synced, waits for a yes (`POST /api/sync { deletes: 'allow' | 'restore' }`).
   - Files are matched by path, not id. A note renamed on one device while edited on another ends up twice (the edit at the old name, with the same id); Give every note an ID gives the copy a new id.
   - The page syncs at start, 8 s after a change it didn't make, every minute while visible and online, and on coming back to the app or the network.
+- **Hosting and installing.** The browser-only build is static files; `BASE_PATH` (default `/`) sets the folder it is served from. App paths are written without it, and the router (`appUrl`, `currentHref`), the API calls and the worker's registration add it; the worker's scope is the folder, and it hands `/api/…` to the backend with the folder taken off. `404.html` is a copy of `index.html`, so hosts without a fallback (GitHub Pages) still open a note's address. The manifest (`public/manifest.webmanifest`, relative URLs) and the icons (`scripts/make-icons.mjs` draws them as PNG) make it installable: Chrome finds no installability errors. `.github/workflows/pages.yml` tests and publishes it on GitHub Pages.
 - **Export and import.** `GET /api/export` is the notes folder as a zip: every visible file, the trash, the vault's ciphertext, `.notedid/settings.json` and the versions in `.notedid/history/`, but not `.git`. `POST /api/import` takes a zip (`application/zip`, up to 1 GB). It adds the files that are the app's: notes, data files, PDFs and pictures, vault files, settings and versions. It drops a single top folder the zip was made from (`dev-notes/`), and never overwrites: identical files count as already there, and different ones are listed and left alone. Then it rescans. A folder import is zipped in the browser first, without hidden folders. The browser saves an export by fetching it and saving the result, because a download link would bypass the browser-only app's service worker.
 - **The name.** The app is called notedid (it was "notesapp" while it was being built). Its folder in the notes folder is `.notedid/`; settings found in the old `.notesapp/` are moved there at startup, and an old export's settings import to the new place. Names nobody sees stay as they were, because existing data depends on them: browser storage keys, the browser app's database, the vault's encryption label.
 - **Ticked tasks.** A ticked task's text is struck through and greyed: in the editor a mark over the GFM `Task` node after its checkbox, in cards and the reading view by CSS on the list item.

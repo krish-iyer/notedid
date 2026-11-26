@@ -1,3 +1,4 @@
+import { appUrl, BASE } from './router.ts';
 import { showToast } from './toast.ts';
 
 /**
@@ -8,7 +9,7 @@ export async function startServiceWorker(): Promise<void> {
   if (!('serviceWorker' in navigator)) {
     throw new Error('this browser can’t keep notes on its own here (no service workers; some private windows turn them off)');
   }
-  await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  await navigator.serviceWorker.register(appUrl('/sw.js'), { scope: BASE });
   if (!navigator.serviceWorker.controller) {
     await new Promise<void>((resolve) => navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true }));
   }
