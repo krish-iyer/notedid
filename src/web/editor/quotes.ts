@@ -97,14 +97,31 @@ function remember(state: EditorState, folded: QuoteBlock[]): void {
   }
 }
 
+/** A quote folded to one line: ❝, its first words and its length. Cards fold their quotes the same way. */
+export function foldedQuoteElement(text: string): HTMLElement {
+  const box = document.createElement('div');
+  box.className = 'cm-quote-folded';
+  box.title = 'Folded quote: click to open it';
+  const mark = document.createElement('span');
+  mark.className = 'cm-quote-folded-mark';
+  mark.textContent = '❝';
+  const words = document.createElement('span');
+  words.className = 'cm-quote-folded-text';
+  words.textContent = text || 'Quote';
+  const size = document.createElement('span');
+  size.className = 'cm-quote-folded-size';
+  const count = text ? text.split(' ').length : 0;
+  size.textContent = `${count} word${count === 1 ? '' : 's'}`;
+  box.append(mark, words, size);
+  return box;
+}
+
 class FoldedQuote extends WidgetType {
   readonly text: string;
-  readonly from: number;
 
-  constructor(text: string, from: number) {
+  constructor(text: string) {
     super();
     this.text = text;
-    this.from = from;
   }
 
   override eq(other: FoldedQuote): boolean {
@@ -115,21 +132,8 @@ class FoldedQuote extends WidgetType {
     // The widget's root has no margins (the editor can't measure them): spacing is its padding.
     const root = document.createElement('div');
     root.className = 'cm-quote-folded-outer';
-    const box = document.createElement('div');
-    box.className = 'cm-quote-folded';
+    const box = foldedQuoteElement(this.text);
     root.append(box);
-    box.title = 'Folded quote: click to open it';
-    const mark = document.createElement('span');
-    mark.className = 'cm-quote-folded-mark';
-    mark.textContent = '❝';
-    const text = document.createElement('span');
-    text.className = 'cm-quote-folded-text';
-    text.textContent = this.text || 'Quote';
-    const size = document.createElement('span');
-    size.className = 'cm-quote-folded-size';
-    const words = this.text ? this.text.split(' ').length : 0;
-    size.textContent = `${words} word${words === 1 ? '' : 's'}`;
-    box.append(mark, text, size);
     box.addEventListener('mousedown', (event) => {
       event.preventDefault();
       const at = view.posAtDOM(root);
@@ -183,7 +187,7 @@ function build(state: EditorState, folds: RangeSet<FoldMark>): QuoteState {
   const folded: QuoteBlock[] = [];
   for (const q of quotes) {
     if (starts.has(q.from)) {
-      decorations.push(Decoration.replace({ widget: new FoldedQuote(q.text, q.from), block: true }).range(q.from, q.to));
+      decorations.push(Decoration.replace({ widget: new FoldedQuote(q.text), block: true }).range(q.from, q.to));
       kept.push(foldMark.range(q.from));
       atomic.push(foldMark.range(q.from, q.to));
       folded.push(q);

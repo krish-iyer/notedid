@@ -95,11 +95,3 @@ export function scrollEditorTo(key: string, line: number): boolean {
   view.focus();
   return true;
 }
-
-/** The 1-based line of the first occurrence of `text` in an open note, or null. */
-export function findLineInEditor(key: string, text: string): number | null {
-  const view = editors.get(key);
-  if (!view) return null;
-  const at = view.state.doc.toString().indexOf(text);
-  return at < 0 ? null : view.state.doc.lineAt(at).number;
-}

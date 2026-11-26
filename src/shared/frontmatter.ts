@@ -61,24 +61,6 @@ export function frontmatterField(content: string, key: string): string | null {
   return null;
 }
 
-/** A top-level list field (`tags: [a, b]`, `tags: a`, or `- a` lines below it). Empty if there is none. */
-export function frontmatterList(content: string, key: string): string[] {
-  const lines = content.split(/\r?\n/);
-  const fm = frontmatterLines(lines);
-  if (!fm) return [];
-  const pattern = keyLine(key);
-  for (let i = fm.open + 1; i < fm.close; i++) {
-    const match = pattern.exec(lines[i] ?? '');
-    if (!match) continue;
-    const inline = (match[1] ?? '').trim();
-    if (inline) return (inline.startsWith('[') ? inline.replace(/^\[|\]$/g, '').split(',') : [inline]).map(unquote).filter(Boolean);
-    const items: string[] = [];
-    for (let j = i + 1; j < fm.close && /^[ \t]*-([ \t]|$)/.test(lines[j] ?? ''); j++) items.push(unquote((lines[j] ?? '').replace(/^[ \t]*-[ \t]*/, '')));
-    return items.filter(Boolean);
-  }
-  return [];
-}
-
 /**
  * Sets a top-level field to a plain value or a list, or removes it when `value` is null (or an
  * empty list). A note without front matter gets a block at the top.

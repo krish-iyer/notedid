@@ -572,6 +572,7 @@ mark {
 }
 
 .segmented {
+  flex: none;
   display: inline-flex;
   max-width: 100%;
   border: 1px solid var(--line);
@@ -584,9 +585,6 @@ mark {
 
 .segmented button {
   flex: none;
-}
-
-.segmented button {
   border: none;
   border-radius: 0;
   min-height: 32px;
@@ -880,16 +878,14 @@ input.date-input {
 }
 
 .result-list,
-.note-list,
-.paper-list {
+.note-list {
   list-style: none;
   padding: 0;
   margin: 8px 0;
 }
 
 .result-list li,
-.note-list li,
-.paper-list li {
+.note-list li {
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
   display: flex;
@@ -922,8 +918,7 @@ input.date-input {
   flex-wrap: wrap;
 }
 
-.tag-row,
-.paper-badges {
+.tag-row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -1254,16 +1249,13 @@ input.date-input {
 }
 
 .cm-quote-line {
+  position: relative;
   border-left: 3px solid var(--line);
   padding-left: 12px !important;
   color: var(--muted);
 }
 
 /* ---------- Papers ---------- */
-.paper-list li {
-  gap: 4px;
-}
-
 .paper-page {
   display: flex;
   flex-direction: column;
@@ -1298,12 +1290,19 @@ input.date-input {
 }
 
 .paper-side {
+  position: relative;
+  /* Its contents can't push the page wider; the tabs shrink to icons below (see @container). */
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
 }
 
 .paper-side .tabs {
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
   padding: 4px 14px 0;
   margin-bottom: 0;
 }
@@ -2232,10 +2231,6 @@ input.date-input {
 }
 
 /* ---------- Compact segmented choices (reading status, filters, history view) ---------- */
-.segmented {
-  flex: none;
-}
-
 .segmented.small button {
   min-height: 28px;
   padding: 3px 10px;
@@ -2317,10 +2312,6 @@ input.date-input {
 
 .pdf-hl.resolved {
   opacity: 0.35;
-}
-
-.paper-side {
-  position: relative;
 }
 
 .paper-split.sized {
@@ -2418,20 +2409,7 @@ body.resizing-columns * {
   text-align: center;
 }
 
-/* ---------- Papers index ---------- */
-.paper-filters {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  margin: 18px 0 6px;
-}
-
-.paper-filters .text-input.filter {
-  width: 100%;
-  margin: 0;
-}
-
+/* ---------- Tag chips and status badges ---------- */
 button.tag-chip {
   border: 1px solid transparent;
   min-height: 0;
@@ -2488,6 +2466,8 @@ button.tag-chip:hover:not(:disabled) {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   border-radius: 2px;
   white-space: pre-wrap;
+  /* A little room between removed text and the text that replaced it. */
+  margin-right: 3px;
 }
 
 .cm-editor .cm-panels-top:has(.cm-compare-bar) {
@@ -2536,11 +2516,6 @@ button.tag-chip:hover:not(:disabled) {
 .cm-compare-bar del,
 .diff-summary del {
   text-decoration: none;
-}
-
-/* A little room between removed text and the text that replaced it. */
-.cm-diff-del {
-  margin-right: 3px;
 }
 
 /* ---------- Dashboards: named tabs of notes, PDFs and boards ---------- */
@@ -2723,6 +2698,7 @@ button.tag-chip:hover:not(:disabled) {
   background: var(--bg);
   /* Visible, so item menus are not cut off; the body clips its own corners. */
   overflow: visible;
+  position: relative;
 }
 
 .dash-panel.wide {
@@ -2736,11 +2712,13 @@ button.tag-chip:hover:not(:disabled) {
   padding: 4px 6px 4px 4px;
   background: var(--surface-2);
   border-bottom: 1px solid var(--line);
+  border-radius: 12px 12px 0 0;
   color: var(--muted);
 }
 
 .dash-panel.collapsed .dash-panel-head {
   border-bottom: none;
+  border-radius: 12px;
 }
 
 .dash-panel-head .icon-button {
@@ -2759,14 +2737,6 @@ button.tag-chip:hover:not(:disabled) {
   white-space: nowrap;
   font-weight: 600;
   color: var(--ink);
-}
-
-.dash-panel-head {
-  border-radius: 12px 12px 0 0;
-}
-
-.dash-panel.collapsed .dash-panel-head {
-  border-radius: 12px;
 }
 
 .dash-panel-body {
@@ -2851,10 +2821,6 @@ button.tag-chip:hover:not(:disabled) {
   text-align: center;
 }
 
-.paper-side .tabs {
-  align-items: center;
-}
-
 .paper-side .tabs .side-hide {
   margin-left: auto;
   min-width: 30px;
@@ -2873,10 +2839,6 @@ button.tag-chip:hover:not(:disabled) {
 }
 
 /* ---------- Dashboard items: drag to reorder ---------- */
-.dash-panel {
-  position: relative;
-}
-
 .dash-grip {
   display: inline-flex;
   padding: 4px 2px;
@@ -2950,10 +2912,6 @@ button.tag-chip:hover:not(:disabled) {
 }
 
 /* ---------- Folded quotes in the editor ---------- */
-.cm-quote-line {
-  position: relative;
-}
-
 .cm-quote-fold {
   position: absolute;
   top: 2px;
@@ -3507,17 +3465,6 @@ button.tag-chip:hover:not(:disabled) {
 }
 
 /* ---------- Paper side pane: never wider than its column ---------- */
-.paper-side {
-  /* Its contents can't push the page wider; the tabs shrink to icons below (see @container). */
-  min-width: 0;
-  container-type: inline-size;
-}
-
-.paper-side .tabs {
-  flex-wrap: nowrap;
-  min-width: 0;
-}
-
 .paper-side .tab {
   flex: none;
 }

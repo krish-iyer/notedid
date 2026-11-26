@@ -63,14 +63,6 @@ describe('paper status', () => {
 });
 
 describe('front matter lists', () => {
-  it('reads lists written in any of the usual ways', async () => {
-    const { frontmatterList } = await import('./frontmatter.ts');
-    expect(frontmatterList(PAPER, 'authors')).toEqual(['A. Author', 'B. Author']);
-    expect(frontmatterList('---\ntags: [fpga, "hls"]\n---\n', 'tags')).toEqual(['fpga', 'hls']);
-    expect(frontmatterList('---\ntags: fpga\n---\n', 'tags')).toEqual(['fpga']);
-    expect(frontmatterList(PAPER, 'tags')).toEqual([]);
-  });
-
   it('writes lists, replacing whatever form was there, and removes empty ones', () => {
     const withTags = setFrontmatterField(PAPER, 'tags', ['fpga', 'hls']);
     expect(withTags).toContain('year: 2017\ntags:\n  - fpga\n  - hls\n---\n');

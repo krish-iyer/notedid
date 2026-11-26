@@ -342,9 +342,17 @@ export function cardMatches(card: Pick<Card, 'properties'>, text: string, filter
     .every((word) => haystack.includes(word));
 }
 
+/** Property names that hold a card's status, in order of preference. */
+const STATUS_KEYS = ['status', 'state', 'stage', 'progress'];
+
+/** Whether a property (its name in lower case) holds a card's status. */
+export function isStatusKey(id: string): boolean {
+  return STATUS_KEYS.includes(id);
+}
+
 /** The property that sums a set up in colour: `status` (or state, stage, progress), when the cards have one. */
 export function statusFacet(facets: readonly Facet[]): Facet | null {
-  for (const id of ['status', 'state', 'stage', 'progress']) {
+  for (const id of STATUS_KEYS) {
     const facet = facets.find((f) => f.id === id);
     if (facet) return facet;
   }

@@ -25,6 +25,11 @@ export function relativePath(fromDir: string, to: string): string {
   return [...from.slice(common).map(() => '..'), ...target.slice(common)].join('/');
 }
 
+/** Text made safe inside HTML: as element text or in a quoted attribute. */
+export function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c);
+}
+
 export function randomId(bytes = 8): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) => b.toString(16).padStart(2, '0')).join('');
 }

@@ -28,6 +28,7 @@ import {
 import { navigate, noteHref } from '../router.ts';
 import { resolveNote } from '../stores.ts';
 import { notePathFacet, privateModeFacet } from './context.ts';
+import { escapeHtml } from '../util.ts';
 import { isInCode } from './quotes.ts';
 import { type MenuEntry, menuElement } from './widgetMenu.ts';
 
@@ -72,10 +73,6 @@ function tableAt(state: EditorState, from: number): TableBlock | null {
 // ---------------------------------------------------------------------------
 
 const inline = new Marked({ gfm: true });
-
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
-}
 
 function renderCell(source: string, privateMode: boolean): string {
   const text = cellText(source).replace(/\[\[([^\]]+)\]\]/g, (_, inner: string) => {
