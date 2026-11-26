@@ -5,6 +5,7 @@ import { safeDecodeURI, splitFrontmatter } from '../shared/markdown.ts';
 import { localISODate } from '../shared/dates.ts';
 import { paperStatusOf } from '../shared/papers.ts';
 import { slugify, uniqueName } from '../shared/slug.ts';
+import { newNoteId, withNoteId } from '../shared/noteIds.ts';
 import { stemOf, stringList } from './analyze.ts';
 import type { NoteIndex } from './noteIndex.ts';
 import { NotFoundError, type NoteService } from './notes.ts';
@@ -204,7 +205,7 @@ export class PaperService {
     const pdfName = pdf ? `${key}.pdf` : null;
     if (pdf) await this.#deps.store.createBytes(`papers/${pdfName}`, pdf);
     const notePath = `papers/${key}.md`;
-    await this.#deps.notes.save(notePath, paperNote(meta, pdfName), null);
+    await this.#deps.notes.save(notePath, withNoteId(paperNote(meta, pdfName), newNoteId()), null);
     return { key, path: notePath, pdf: pdf !== null };
   }
 

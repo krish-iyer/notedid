@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { BacklinksResponse, ConflictResponse, NoteDoc, NoteSummary, SearchResponse, Settings, TaskItem } from '../shared/api.ts';
+import { noteIdOf } from '../shared/noteIds.ts';
 import { hashContent } from './storage.ts';
 import { makeTestServer, ORIGIN, type TestServer } from './testkit.ts';
 
@@ -64,13 +65,17 @@ describe('notes', () => {
     const second = (await (await s.post('/api/note/create', { title: 'Meeting with Ana' })).json()) as { path: string };
     expect(first.path).toBe('notes/meeting-with-ana.md');
     expect(second.path).toBe('notes/meeting-with-ana-2.md');
-    expect(await s.read(first.path)).toBe('# Meeting with Ana\n\n');
+    // New notes are made with a permanent id in their front matter, each its own.
+    const firstText = await s.read(first.path);
+    expect(firstText).toMatch(/^---\nid: [a-z][0-9a-z]{11}\n---\n# Meeting with Ana\n\n$/);
+    expect(noteIdOf(await s.read(second.path))).not.toBe(noteIdOf(firstText));
+    expect(s.index.list().find((n) => n.path === first.path)?.id).toBe(noteIdOf(firstText));
     const board = (await (await s.post('/api/note/create', { title: 'Thesis', kind: 'board' })).json()) as { path: string };
     expect(board.path).toBe('boards/thesis.md');
-    expect(await s.read(board.path)).toContain('type: board\ntag: thesis');
+    expect(await s.read(board.path)).toMatch(/^---\nid: [a-z0-9]{12}\ntype: board\ntag: thesis\n/);
     const dashboard = (await (await s.post('/api/note/create', { title: 'Research', kind: 'dashboard' })).json()) as { path: string };
     expect(dashboard.path).toBe('dashboards/research.md');
-    expect(await s.read(dashboard.path)).toBe('---\ntype: dashboard\n---\n# Research\n\n## Overview\n');
+    expect(await s.read(dashboard.path)).toMatch(/^---\nid: [a-z0-9]{12}\ntype: dashboard\n---\n# Research\n\n## Overview\n$/);
     expect(s.index.list().find((n) => n.path === dashboard.path)?.kind).toBe('dashboard');
   });
 
@@ -179,7 +184,8 @@ describe('tasks and capture', () => {
     expect(await (await s.post('/api/capture', capture)).json()).toEqual({ path: 'journal/2026-11-25.md' });
     await s.post('/api/capture', capture);
     await s.post('/api/capture', { text: 'todo book flights', capturedAt: '2026-11-25T23:51:00+03:00' });
-    expect(await s.read('journal/2026-11-25.md')).toBe('- 23:50 call the dentist\n- [ ] book flights\n');
+    // The day's first capture made its journal note, with an id; later captures leave the id alone.
+    expect(await s.read('journal/2026-11-25.md')).toMatch(/^---\nid: [a-z0-9]{12}\n---\n- 23:50 call the dentist\n- \[ \] book flights\n$/);
     await s.post('/api/capture', { text: '[ ] bread', target: 'notes/groceries.md' });
     expect(await s.read('notes/groceries.md')).toBe('# Groceries\n\n- [ ] milk\n- [ ] eggs\n- [ ] bread\n');
   });

@@ -9,6 +9,7 @@ const SCHEMA = `
 CREATE TABLE notes (
   id INTEGER PRIMARY KEY,
   path TEXT NOT NULL UNIQUE,
+  note_id TEXT,
   title TEXT NOT NULL,
   kind TEXT NOT NULL,
   date TEXT,
@@ -114,8 +115,8 @@ export class NoteIndex {
     try {
       this.#delete(notePath);
       const result = this.#db
-        .prepare('INSERT INTO notes (path, title, kind, date, mtime, hash, excerpt, meta, meta_tags, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(notePath, a.title, a.kind, a.date, Math.round(mtime), hash, a.excerpt, JSON.stringify(meta), JSON.stringify(a.metaTags), content);
+        .prepare('INSERT INTO notes (path, note_id, title, kind, date, mtime, hash, excerpt, meta, meta_tags, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(notePath, a.id, a.title, a.kind, a.date, Math.round(mtime), hash, a.excerpt, JSON.stringify(meta), JSON.stringify(a.metaTags), content);
       this.#db.prepare('INSERT INTO notes_fts (rowid, title, body) VALUES (?, ?, ?)').run(result.lastInsertRowid, a.title, content);
 
       const keys: [string, number][] = [
@@ -187,7 +188,7 @@ export class NoteIndex {
   /** Summaries of all notes (or the given ones), most recently changed first. */
   list(only?: string[]): NoteSummary[] {
     const filter = only ? `WHERE path IN (${only.map(() => '?').join(',')})` : '';
-    const rows = this.#db.prepare(`SELECT path, title, kind, date, mtime, excerpt, meta FROM notes ${filter} ORDER BY mtime DESC`).all(...(only ?? [])) as Row[];
+    const rows = this.#db.prepare(`SELECT path, note_id, title, kind, date, mtime, excerpt, meta FROM notes ${filter} ORDER BY mtime DESC`).all(...(only ?? [])) as Row[];
     const tags = new Map<string, string[]>();
     for (const r of this.#db.prepare('SELECT path, tag FROM tags').all() as Row[]) {
       const list = tags.get(str(r.path)) ?? [];
@@ -198,6 +199,7 @@ export class NoteIndex {
     for (const r of this.#db.prepare('SELECT path, COUNT(*) AS n FROM tasks WHERE done = 0 GROUP BY path').all() as Row[]) open.set(str(r.path), Number(r.n));
     return rows.map((r) => ({
       path: str(r.path),
+      id: r.note_id === null ? null : str(r.note_id),
       title: str(r.title),
       kind: str(r.kind) as NoteKind,
       date: r.date === null ? null : str(r.date),

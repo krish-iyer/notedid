@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { NoteSummary } from '../../shared/api.ts';
 import { fuzzyFilter, type FuzzyMatch } from '../../shared/fuzzy.ts';
-import { captureToToday, createBoard, createDashboard, createNote } from '../actions.ts';
+import { captureToToday, createBoard, createDashboard, createNote, giveNotesIds } from '../actions.ts';
 import { navigate, noteHref } from '../router.ts';
 import { useNotes } from '../stores.ts';
 import { setTheme } from '../theme.ts';
@@ -45,23 +45,26 @@ export function Switcher({ onClose }: { onClose: () => void }) {
         { kind: 'action', id: 'theme-light', icon: 'sun', label: 'Theme: light', run: () => setTheme('light') },
         { kind: 'action', id: 'theme-dark', icon: 'moon', label: 'Theme: dark', run: () => setTheme('dark') },
         { kind: 'action', id: 'theme-auto', icon: 'auto', label: 'Theme: follow the system', run: () => setTheme('auto') },
+        { kind: 'action', id: 'note-ids', icon: 'check', label: 'Give every note an ID', run: () => void giveNotesIds() },
       ];
     }
     const found = fuzzyFilter(notes, q, noteLabel, 30).map(({ item, match }): Item => ({ kind: 'note', note: item, match }));
-    const themes: Item[] = /^(theme|dark|light)/i.test(q)
+    // Commands that match what was typed: the theme, giving notes ids.
+    const commands: Item[] = /^(theme|dark|light)/i.test(q)
       ? [
           { kind: 'action', id: 'theme-light', icon: 'sun', label: 'Theme: light', run: () => setTheme('light') },
           { kind: 'action', id: 'theme-dark', icon: 'moon', label: 'Theme: dark', run: () => setTheme('dark') },
           { kind: 'action', id: 'theme-auto', icon: 'auto', label: 'Theme: follow the system', run: () => setTheme('auto') },
         ]
       : [];
+    if (/^(give|ids?\b|note ids?)/i.test(q)) commands.push({ kind: 'action', id: 'note-ids', icon: 'check', label: 'Give every note an ID', run: () => void giveNotesIds() });
     const exact = notes.some((n) => n.title.toLowerCase() === q.toLowerCase());
     const actions: Item[] = [
       ...(exact ? [] : [{ kind: 'action' as const, id: 'create', icon: 'plus' as const, label: `Create note “${q}”`, hint: 'Shift Enter', run: () => void createNote(q) }]),
       { kind: 'action', id: 'capture', icon: 'today', label: `Add “${q}” to today`, hint: 'Alt Enter', run: () => void captureToToday(q) },
       { kind: 'action', id: 'search', icon: 'search', label: `Search for “${q}”`, run: () => navigate(`/search?q=${encodeURIComponent(q)}`) },
     ];
-    return [...themes, ...found, ...actions];
+    return [...commands, ...found, ...actions];
   }, [query, notes]);
 
   useEffect(() => setSelected(0), [query]);

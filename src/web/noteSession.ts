@@ -1,5 +1,7 @@
 import type { NoteDoc } from '../shared/api.ts';
+import { newNoteId, noteIdOf, withNoteId } from '../shared/noteIds.ts';
 import { fetchNote, SaveConflict, saveNote } from './api.ts';
+import { transformEditorText } from './editor/registry.ts';
 import { messageOf } from './util.ts';
 
 export type SaveStatus = 'loading' | 'saved' | 'unsaved' | 'saving' | 'conflict' | 'error' | 'gone';
@@ -149,14 +151,21 @@ export class NoteSession {
       return;
     }
     this.#set({ status: 'saving' });
-    const request = { path: this.path, content, baseHash: this.#baseHash };
+    // The save that makes the file (a new journal day, say) gives the note its id.
+    const id = this.#baseHash === null && noteIdOf(content) === null ? newNoteId() : null;
+    const request = { path: this.path, content: id ? withNoteId(content, id) : content, baseHash: this.#baseHash };
     const fitsKeepalive = new TextEncoder().encode(JSON.stringify(request)).length < KEEPALIVE_MAX_BYTES;
     this.#saving = true;
     try {
       const result = await saveNote(request, { keepalive: keepalive && fitsKeepalive });
       this.#baseHash = result.hash;
-      this.#saved = content;
-      const dirty = this.#draft !== content;
+      this.#saved = request.content;
+      if (id) {
+        // The open editor gets the id at once: one change at the top, kept out of undo, typing undisturbed.
+        const draft = withNoteId(this.#draft, id);
+        if (!transformEditorText(this.path, (text) => withNoteId(text, id), { remote: true })) this.#draft = draft;
+      }
+      const dirty = this.#draft !== request.content;
       this.#set({ status: dirty ? 'unsaved' : 'saved', error: null });
       if (dirty) this.#schedule(AUTOSAVE_DELAY_MS);
     } catch (err) {

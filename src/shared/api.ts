@@ -39,6 +39,8 @@ export type NoteKind = 'journal' | 'note' | 'paper' | 'board' | 'dashboard' | 'c
 /** What the index knows about a note; enough for lists, the switcher, cards and links. */
 export interface NoteSummary {
   path: string;
+  /** Its permanent id (front matter `id`), or null for a note made before notes had ids. */
+  id: string | null;
   title: string;
   kind: NoteKind;
   /** Journal notes: their day. */

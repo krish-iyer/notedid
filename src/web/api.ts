@@ -92,6 +92,8 @@ export const api = {
   createNote: (title: string, folder = 'notes') => call<{ path: string }>('POST', '/api/note/create', { title, folder }),
   createDashboard: (title: string) => call<{ path: string }>('POST', '/api/note/create', { title, kind: 'dashboard' }),
   createBoard: (title: string, tag: string) => call<{ path: string }>('POST', '/api/note/create', { title, kind: 'board', tag }),
+  noteIdStatus: () => call<{ notes: number; missing: number; copies: number }>('GET', '/api/ids'),
+  assignNoteIds: () => call<{ added: number; renewed: number }>('POST', '/api/ids'),
   renameNote: (path: string, title: string) => call<{ path: string; updated: string[] }>('POST', '/api/note/rename', { path, title }),
   deleteNote: (path: string) => call<{ trashPath: string }>('POST', '/api/note/delete', { path }),
   restoreNote: (path: string, commit: string, versionPath: string) => call<{ hash: string | null }>('POST', '/api/note/restore', { path, commit, versionPath }),

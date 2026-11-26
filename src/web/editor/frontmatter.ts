@@ -5,6 +5,7 @@ import { isFrontmatterClose, isFrontmatterOpen } from '../../shared/frontmatter.
 /**
  * The front matter block (`---` … `---` at the top of a note) folds into one "Properties" line.
  * Clicking it, or moving the cursor into it, shows the YAML for editing. The file is unchanged.
+ * A block with nothing but the note's `id:` isn't shown at all.
  */
 
 const focusChanged = StateEffect.define<boolean>();
@@ -80,6 +81,8 @@ function build(state: EditorState, focused: boolean): DecorationSet {
   if (focused && state.selection.ranges.some((r) => r.from <= to && r.to >= from)) return Decoration.none;
   const lines: string[] = [];
   for (let n = block.first + 1; n < block.last; n++) lines.push(state.doc.line(n).text);
+  // Front matter that only holds the note's id is for the app, not for reading: it isn't shown.
+  if (lines.every((line) => !line.trim() || /^id[ \t]*:/.test(line))) return Decoration.set([Decoration.replace({ block: true }).range(from, to)]);
   return Decoration.set([Decoration.replace({ widget: new PropertiesWidget(tagsOf(lines)), block: true }).range(from, to)]);
 }
 

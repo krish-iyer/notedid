@@ -2,8 +2,11 @@ import { parse as parseYaml } from 'yaml';
 import type { NoteKind } from '../shared/api.ts';
 import { journalDateOf } from '../shared/dates.ts';
 import { analyzeBody, type BodyAnalysis, excerptOf, lineIndex, splitFrontmatter } from '../shared/markdown.ts';
+import { noteIdOf } from '../shared/noteIds.ts';
 
 export interface NoteAnalysis extends BodyAnalysis {
+  /** Its permanent id (front matter `id`), or null. */
+  id: string | null;
   title: string;
   kind: NoteKind;
   /** Journal notes: their day. */
@@ -57,6 +60,7 @@ export function analyzeNote(path: string, content: string): NoteAnalysis {
     ...analysis,
     tags,
     metaTags: [...new Set(metaTags)],
+    id: noteIdOf(content),
     title,
     kind,
     date,

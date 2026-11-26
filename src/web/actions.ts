@@ -155,3 +155,30 @@ export async function addToBoard(boardPath: string, clusterId: string, notePath:
   }
   throw new Error('the board kept changing; try again');
 }
+
+/**
+ * Ctrl+K "Give every note an ID": notes made before notes had ids get one (an `id:` line in their
+ * front matter), and copies sharing another note's id get their own. Asks first; nothing else changes.
+ */
+export async function giveNotesIds(): Promise<void> {
+  try {
+    const { notes, missing, copies } = await api.noteIdStatus();
+    if (missing === 0 && copies === 0) {
+      showToast(`All ${notes} note${notes === 1 ? ' has' : 's have'} an ID already.`);
+      return;
+    }
+    const what = [missing ? `${missing} note${missing === 1 ? '' : 's'} without one` : '', copies ? `${copies} cop${copies === 1 ? 'y' : 'ies'} sharing another note’s` : ''].filter(Boolean).join(' and ');
+    const ok = await askConfirm({
+      title: 'Give every note an ID?',
+      message: `An ID is a permanent name for a note that stays the same when you rename or move it, which syncing between devices relies on. This adds one line (id: and 12 random letters and digits) to the front matter of ${what}. Nothing else in your notes changes, and the history keeps this as one step.`,
+      confirmLabel: 'Add IDs',
+    });
+    if (!ok) return;
+    const { added, renewed } = await api.assignNoteIds();
+    await refreshNotes();
+    const total = added + renewed;
+    showToast(`${total} note${total === 1 ? '' : 's'} got an ID.`);
+  } catch (err) {
+    showToast(`Could not give notes IDs: ${messageOf(err)}`, 'error');
+  }
+}

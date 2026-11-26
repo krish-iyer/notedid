@@ -1,6 +1,7 @@
 import { type MouseEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { appendComment, commentsPathFor, type DocComment, newCommentsNote, parseComments } from '../../shared/comments.ts';
 import { splitFrontmatter } from '../../shared/markdown.ts';
+import { newNoteId, withNoteId } from '../../shared/noteIds.ts';
 import { fetchNote, SaveConflict, saveNote } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
 import { openLink } from '../editor/links.ts';
@@ -98,7 +99,7 @@ export function ReadPage({ path }: { path: string }) {
     try {
       for (let attempt = 0; ; attempt++) {
         const current = await fetchNote(commentsPath);
-        const base = current.hash ? current.content : newCommentsNote(title, path);
+        const base = current.hash ? current.content : withNoteId(newCommentsNote(title, path), newNoteId());
         try {
           await saveNote({ path: commentsPath, content: appendComment(base, pending.quote, draft), baseHash: current.hash });
           break;

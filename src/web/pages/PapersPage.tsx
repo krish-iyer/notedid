@@ -6,6 +6,7 @@ import { addToCollection, COLLECTIONS_PATH, collectionsOf, deleteCollection, new
 import { setFrontmatterField } from '../../shared/frontmatter.ts';
 import { PAPER_STATUSES, type PaperStatus } from '../../shared/papers.ts';
 import { tagify } from '../../shared/slug.ts';
+import { newNoteId, withNoteId } from '../../shared/noteIds.ts';
 import { cardTargetFor, updateNoteText } from '../actions.ts';
 import { api, fetchNote, SaveConflict, saveNote } from '../api.ts';
 import { AddToBoard } from '../components/AddToBoard.tsx';
@@ -511,7 +512,7 @@ export function PapersPage() {
     try {
       for (let attempt = 0; ; attempt++) {
         const doc = await fetchNote(COLLECTIONS_PATH);
-        const content = serializeBoard(change(parseBoard(doc.content || newCollectionsContent())));
+        const content = serializeBoard(change(parseBoard(doc.content || withNoteId(newCollectionsContent(), newNoteId()))));
         if (content === doc.content) break;
         try {
           await saveNote({ path: COLLECTIONS_PATH, content, baseHash: doc.hash });

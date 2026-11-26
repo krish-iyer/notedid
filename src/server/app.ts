@@ -117,6 +117,10 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     return c.json(await ctx.notes.save(normalizeNotePath(body.path), body.content, body.baseHash));
   });
 
+  // Note ids: how many notes have none yet (or share a copy's), and giving them ids.
+  app.get('/api/ids', async (c) => c.json(await ctx.notes.idStatus()));
+  app.post('/api/ids', async (c) => c.json(await ctx.notes.assignIds()));
+
   app.post('/api/note/create', smallBody, async (c) => {
     const body = await jsonBody<{ title: string; folder?: string; kind?: string; tag?: string }>(c, { title: 'string', folder: 'string?', kind: 'string?', tag: 'string?' });
     if (body.kind === 'board') {

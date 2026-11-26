@@ -2,7 +2,9 @@ import path from 'node:path';
 import type { CaptureRequest } from '../shared/api.ts';
 import { appendBlock, formatCapture } from '../shared/capture.ts';
 import { isISODate, journalDateOf, journalPath, localISODate, localTime } from '../shared/dates.ts';
+import { setFrontmatterField } from '../shared/frontmatter.ts';
 import { analyzeBody, lineIndex, linkKey, splitFrontmatter } from '../shared/markdown.ts';
+import { newNoteId, noteIdOf, withNoteId } from '../shared/noteIds.ts';
 import { slugify, uniqueName } from '../shared/slug.ts';
 import { toggleTaskLine } from '../shared/tasks.ts';
 import { stemOf } from './analyze.ts';
@@ -134,8 +136,75 @@ export class NoteService {
     const existing = this.#index.paths();
     const slug = uniqueName(slugify(name), (candidate) => existing.includes(`${folder}/${candidate}.md`));
     const rel = `${folder}/${slug}.md`;
-    await this.save(rel, content ?? `# ${name}\n\n`, null);
+    await this.save(rel, withNoteId(content ?? `# ${name}\n\n`, newNoteId()), null);
     return rel;
+  }
+
+  /** Notes without an id, and notes that share one (copies): the oldest keeps it, the others need new ones. */
+  async #idReport(): Promise<{ notes: number; missing: string[]; copies: string[]; taken: Set<string> }> {
+    const paths = (await this.#store.list(['.md'])).filter(NoteService.indexable);
+    const missing: string[] = [];
+    const byId = new Map<string, { rel: string; mtime: number }[]>();
+    for (const rel of paths) {
+      const doc = await this.#store.read(rel);
+      if (doc.hash === null) continue;
+      const id = noteIdOf(doc.content);
+      if (id === null) {
+        missing.push(rel);
+        continue;
+      }
+      const same = byId.get(id) ?? [];
+      same.push({ rel, mtime: (await this.#store.stat(rel))?.mtime ?? 0 });
+      byId.set(id, same);
+    }
+    const copies = [...byId.values()]
+      .filter((same) => same.length > 1)
+      .flatMap((same) => same.sort((a, b) => a.mtime - b.mtime || a.rel.localeCompare(b.rel)).slice(1))
+      .map((note) => note.rel);
+    return { notes: paths.length, missing, copies, taken: new Set(byId.keys()) };
+  }
+
+  /** How many notes have no id yet, and how many are copies sharing another note's id. */
+  async idStatus(): Promise<{ notes: number; missing: number; copies: number }> {
+    const { notes, missing, copies } = await this.#idReport();
+    return { notes, missing: missing.length, copies: copies.length };
+  }
+
+  /**
+   * Gives every note without an id one, and every copy (a note sharing another's id) a new one. Only
+   * the `id:` line changes. Pending edits are committed to the history first, so this is a commit
+   * of its own.
+   */
+  async assignIds(): Promise<{ added: number; renewed: number }> {
+    const { missing, copies, taken } = await this.#idReport();
+    const fresh = () => {
+      let id = newNoteId();
+      while (taken.has(id)) id = newNoteId();
+      taken.add(id);
+      return id;
+    };
+    await this.#history?.commitNow();
+    let added = 0;
+    for (const rel of missing) {
+      let changed = false;
+      await this.#edit(rel, (content, exists) => {
+        changed = exists && noteIdOf(content) === null;
+        return changed ? withNoteId(content, fresh()) : null;
+      });
+      if (changed) added++;
+    }
+    let renewed = 0;
+    for (const rel of copies) {
+      const id = noteIdOf((await this.#store.read(rel)).content);
+      let changed = false;
+      await this.#edit(rel, (content, exists) => {
+        changed = exists && id !== null && noteIdOf(content) === id;
+        return changed ? setFrontmatterField(content, 'id', fresh()) : null;
+      });
+      if (changed) renewed++;
+    }
+    if (added + renewed > 0) await this.#history?.commitNow(`Give ${added + renewed === 1 ? 'a note an id' : `${added + renewed} notes ids`}`);
+    return { added, renewed };
   }
 
   /**
@@ -257,7 +326,8 @@ export class NoteService {
     const time = at ? at.slice(11, 16) : localTime();
     const rel = request.target ? normalizeNotePath(request.target) : journalPath(date);
     const block = formatCapture(text, request.target ? null : time);
-    await this.#edit(rel, (content) => appendBlock(content, block));
+    // A day's first capture makes its journal note, which gets an id like any new note.
+    await this.#edit(rel, (content, exists) => (exists ? appendBlock(content, block) : withNoteId(appendBlock(content, block), newNoteId())));
     if (request.id) {
       this.#captured.set(request.id, rel);
       if (this.#captured.size > 1000) this.#captured.delete(this.#captured.keys().next().value ?? '');

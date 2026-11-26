@@ -54,6 +54,7 @@ The app is published on this machine's localhost only, because there is no login
 - Pasting or dropping images adds them to `files/`.
 - A quote (`> ` lines) can fold to one line showing that a quote is there, its first words and its length: hover it and click ▴, and click the folded line to open it. `/fold quotes` and `/unfold quotes` do the whole note, handy in a paper's review notes. Folds are remembered per note in this browser (not for vault notes). The file doesn't change.
 - A note's YAML front matter (the `---` block at the top) folds into one **▸ Properties** line. Click it to edit the YAML.
+- Every note has a permanent ID: an `id:` line (12 random letters and digits) at the top of its front matter. It stays the same when you rename or move the note, so syncing between devices can follow it. New notes get one when they're made. For notes made before, Ctrl+K → **Give every note an ID** adds them, and asks first. Front matter that holds only the ID isn't shown in the editor.
 - Files keep their exact bytes. Line endings are preserved, and the app never reformats text you didn't touch.
 
 **Finding things.**

@@ -33,13 +33,16 @@ export function compareEditor(key: string, base: CompareBase | null): boolean {
   return true;
 }
 
-/** Changes an open note's text with `change` (null leaves it). Returns false if the note isn't open. */
-export function transformEditorText(key: string, change: (text: string) => string | null): boolean {
+/**
+ * Changes an open note's text with `change` (null leaves it). Returns false if the note isn't open.
+ * A `remote` change can't be undone in the editor.
+ */
+export function transformEditorText(key: string, change: (text: string) => string | null, options: { remote?: boolean } = {}): boolean {
   const view = editors.get(key);
   if (!view) return false;
   const text = view.state.sliceDoc();
   const next = change(text);
-  if (next !== null && next !== text) replaceEditorText(view, next);
+  if (next !== null && next !== text) replaceEditorText(view, next, options);
   return true;
 }
 
