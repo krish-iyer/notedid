@@ -23,7 +23,7 @@ export interface PaperMeta {
   abstract: string | null;
 }
 
-/** A failure talking to arXiv or Crossref. */
+/** A failure talking to arXiv, DataCite or Crossref. */
 export class UpstreamError extends Error {
   override name = 'UpstreamError';
 }
@@ -67,6 +67,23 @@ export function parseArxivFeed(xml: string, id: string): PaperMeta {
     url: `https://arxiv.org/abs/${id}`,
     abstract: field('summary'),
   };
+}
+
+/**
+ * An arXiv paper's details as DataCite has them (arXiv registers its DOIs there). Used when arXiv's
+ * own API can't be reached: a browser never can, since arXiv's API doesn't allow pages to call it.
+ */
+export function parseDataCite(json: unknown, id: string): PaperMeta {
+  const attributes = ((json as { data?: { attributes?: Record<string, unknown> } } | null)?.data?.attributes ?? {}) as Record<string, unknown>;
+  const list = (value: unknown) => (Array.isArray(value) ? (value as Record<string, unknown>[]).filter((v) => typeof v === 'object' && v !== null) : []);
+  const text = (value: unknown) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '');
+  const title = text(list(attributes.titles).map((t) => t.title).find((t) => typeof t === 'string'));
+  if (!title) throw new NotFoundError(`arXiv has no paper ${id}`);
+  const authors = list(attributes.creators)
+    .map((c) => (text(c.givenName) && text(c.familyName) ? `${text(c.givenName)} ${text(c.familyName)}` : text(c.name)))
+    .filter(Boolean);
+  const abstract = text(list(attributes.descriptions).find((d) => d.descriptionType === 'Abstract')?.description) || null;
+  return { title, authors, year: Number(attributes.publicationYear) || null, venue: 'arXiv', arxiv: id, doi: null, url: `https://arxiv.org/abs/${id}`, abstract };
 }
 
 export function parseCrossref(json: unknown, doi: string): PaperMeta {
@@ -150,12 +167,7 @@ export class PaperService {
 
     try {
       if (id.kind === 'arxiv') {
-        const feed = await this.#deps.fetch(`https://export.arxiv.org/api/query?id_list=${encodeURIComponent(id.id)}`, {
-          headers: { 'user-agent': USER_AGENT },
-          signal: AbortSignal.timeout(20_000),
-        });
-        if (!feed.ok) throw new UpstreamError(`arXiv answered ${feed.status}`);
-        const meta = parseArxivFeed(await feed.text(), id.id);
+        const meta = await this.#arxivDetails(id.id);
         const file = await fetchBytes(`https://arxiv.org/pdf/${id.id}`, this.#deps.fetch, MAX_PDF_BYTES).catch(() => null);
         const created = await this.#create(meta, file && isPdf(file.bytes) ? file.bytes : null);
         return { ...created, existing: false };
@@ -169,6 +181,25 @@ export class PaperService {
       if (err instanceof NotFoundError || err instanceof UpstreamError || err instanceof PathError) throw err;
       throw new UpstreamError(`Could not reach ${id.kind === 'arxiv' ? 'arXiv' : 'Crossref'}: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  /** An arXiv paper's details: from arXiv, or from DataCite when arXiv's API can't be reached. */
+  async #arxivDetails(id: string): Promise<PaperMeta> {
+    try {
+      const feed = await this.#deps.fetch(`https://export.arxiv.org/api/query?id_list=${encodeURIComponent(id)}`, {
+        headers: { 'user-agent': USER_AGENT },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (feed.ok) return parseArxivFeed(await feed.text(), id);
+    } catch (err) {
+      if (err instanceof NotFoundError) throw err;
+      // Unreachable (from a browser it always is): DataCite has the same details.
+    }
+    const doi = `10.48550/arXiv.${id.replace(/v\d+$/, '')}`;
+    const { status, body } = await fetchJson(`https://api.datacite.org/dois/${encodeURI(doi)}`, this.#deps.fetch);
+    if (status === 404) throw new NotFoundError(`arXiv has no paper ${id}`);
+    if (status !== 200) throw new UpstreamError(`Neither arXiv nor DataCite answered (DataCite: ${status})`);
+    return parseDataCite(body, id);
   }
 
   /** Adds a paper from a PDF file. */

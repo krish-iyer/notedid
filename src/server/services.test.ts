@@ -190,6 +190,40 @@ describe('papers', () => {
     expect(list).toMatchObject([{ key: 'vaswani2017attention', pdf: 'papers/vaswani2017attention.pdf', highlights: 0 }]);
   });
 
+  it('imports an arXiv paper through DataCite when arXiv\'s API can\'t be reached (as from a browser)', async () => {
+    const fetched: string[] = [];
+    const s = await makeTestServer({
+      fetch: async (input) => {
+        const url = String(input);
+        fetched.push(url);
+        if (url.startsWith('https://export.arxiv.org/')) throw new TypeError('Failed to fetch');
+        if (url === 'https://api.datacite.org/dois/10.48550/arXiv.1706.03762') {
+          return Response.json({
+            data: {
+              attributes: {
+                titles: [{ title: 'Attention Is All You Need' }],
+                creators: [{ name: 'Vaswani, Ashish', givenName: 'Ashish', familyName: 'Vaswani' }, { name: 'Shazeer, Noam' }],
+                publicationYear: 2017,
+                descriptions: [{ description: 'The dominant sequence  transduction models…', descriptionType: 'Abstract' }],
+              },
+            },
+          });
+        }
+        if (url.startsWith('https://arxiv.org/pdf/')) return new Response(PDF, { headers: { 'content-type': 'application/pdf' } });
+        return new Response('no', { status: 404 });
+      },
+    });
+    cleanups.push(s.cleanup);
+    const res = await s.post('/api/papers/import', { source: 'arXiv:1706.03762v7' });
+    expect(await res.json()).toEqual({ key: 'vaswani2017attention', path: 'papers/vaswani2017attention.md', pdf: true, existing: false });
+    const note = await s.read('papers/vaswani2017attention.md');
+    expect(note).toContain('title: Attention Is All You Need');
+    expect(note).toContain('authors:\n  - Ashish Vaswani\n  - Shazeer, Noam\n');
+    expect(note).toContain('## Abstract\n\nThe dominant sequence transduction models…');
+    expect(fetched.some((u) => u.startsWith('https://api.datacite.org/'))).toBe(true);
+    expect((await s.post('/api/papers/import', { source: '2501.99999' })).status).toBe(404);
+  });
+
   it('reports when arXiv or Crossref cannot be reached', async () => {
     const s = await makeTestServer();
     cleanups.push(s.cleanup);
