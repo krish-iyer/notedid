@@ -13,6 +13,8 @@ export interface Disk {
   stat(rel: string): Promise<{ size: number; mtime: number } | null>;
   /** Moves a file. Fails (PathError) when there is no such file or something is at `to` already. */
   move(from: string, to: string): Promise<void>;
-  /** Every file below folder `dir` ('' for all of them), sorted. Hidden files and folders are left out. */
+  /** Removes a file. Nothing happens when there is no such file. */
+  remove(rel: string): Promise<void>;
+  /** Every file below folder `dir` ('' for all of them), sorted. Hidden files and folders below `dir` are left out. */
   list(dir: string): Promise<string[]>;
 }

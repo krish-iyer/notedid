@@ -14,7 +14,7 @@ export interface Config {
   allowedOrigins: string[];
   /** Folder with the built web client, served in production. */
   webDist: string;
-  /** Note history: commit this long after changes stop. */
+  /** Keep a note's version (and commit the git backup) this long after changes stop. */
   historyDelayMs: number;
 }
 

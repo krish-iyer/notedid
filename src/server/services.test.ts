@@ -5,7 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseQuery } from '../shared/query.ts';
-import { GitHistory } from './git.ts';
+import { GitBackup } from './git.ts';
 import { memoryDatabase } from './nodeSqlite.ts';
 import { NoteIndex } from './noteIndex.ts';
 import { appendBlock, formatCapture, rewriteLinks } from './notes.ts';
@@ -102,29 +102,33 @@ describe('note operations', () => {
   });
 });
 
-describe('note history (git)', () => {
-  it('keeps versions in the notes folder’s own repository', async () => {
+describe('the git backup', () => {
+  it('commits the notes folder to its own repository, leaving out the notes’ versions', async () => {
     const outer = await fs.mkdtemp(path.join(os.tmpdir(), 'notesapp-git-'));
     cleanups.push(() => fs.rm(outer, { recursive: true, force: true }));
     // The notes folder sits inside another repository, like dev-notes inside the code repo.
     await run('git', ['init', '-q'], { cwd: outer });
-    const s = await makeTestServer({ history: true, files: { 'notes/a.md': 'one\n' } });
+    const s = await makeTestServer({ git: true, files: { 'notes/a.md': 'one\n' } });
     cleanups.push(s.cleanup);
     const nested = path.join(outer, 'notes');
     await fs.rename(s.dir, nested).catch(async () => fs.cp(s.dir, nested, { recursive: true }));
-    const history = new GitHistory(nested, { delayMs: 60_000 });
-    expect(await history.init()).toBe(true);
+    const backup = new GitBackup(nested, { delayMs: 60_000 });
+    expect(await backup.init()).toBe(true);
     const top = (await run('git', ['rev-parse', '--show-toplevel'], { cwd: nested })).stdout.trim();
     expect(await fs.realpath(top)).toBe(await fs.realpath(nested));
 
     await fs.writeFile(path.join(nested, 'notes/a.md'), 'two\n');
-    const commit = await history.commitNow();
-    expect(commit).toMatch(/^[0-9a-f]{40}$/);
-    expect(await history.commitNow()).toBeNull();
-    const log = await history.log('notes/a.md');
-    expect(log.map((e) => e.message)).toEqual(['Update notes/a.md', 'Notes as they were when history started']);
-    expect(await history.show(log[1]?.commit ?? '', 'notes/a.md')).toBe('one\n');
-    expect(await history.show('--help', 'notes/a.md')).toBeNull();
+    await fs.mkdir(path.join(nested, '.notedid/history/k7q9m2vbfz4r'), { recursive: true });
+    await fs.writeFile(path.join(nested, '.notedid/history/k7q9m2vbfz4r/2026-11-26 14.05.33 UTC.md'), 'one\n');
+    expect(await backup.commitNow()).toMatch(/^[0-9a-f]{40}$/);
+    expect(await backup.commitNow()).toBeNull();
+    const log = (await run('git', ['log', '--format=%s', '--name-only'], { cwd: nested })).stdout;
+    expect(log).toContain('Update notes/a.md');
+    expect(log).not.toContain('.notedid/history');
+    // Starting again doesn't add the exclusion twice.
+    expect(await new GitBackup(nested).init()).toBe(true);
+    const exclude = await fs.readFile(path.join(nested, '.git/info/exclude'), 'utf8');
+    expect(exclude.split('\n').filter((line) => line === '/.notedid/history/')).toHaveLength(1);
   });
 });
 

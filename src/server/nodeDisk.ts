@@ -59,6 +59,12 @@ export class NodeDisk implements Disk {
     await fs.rename(from, to);
   }
 
+  async remove(rel: string): Promise<void> {
+    // Checked like any other path, then the entry itself goes (a symlink, not what it points to).
+    if ((await this.#existingFile(rel)) === null) return;
+    await fs.unlink(path.join(this.base, rel));
+  }
+
   /** Skips hidden files and folders, and symlinked folders. */
   async list(dir: string): Promise<string[]> {
     const found: string[] = [];

@@ -1,6 +1,5 @@
 /// <reference lib="webworker" />
-import type { Hono } from 'hono';
-import { startBackend } from './backend.ts';
+import { type Backend, startBackend } from './backend.ts';
 
 /**
  * The service worker of the browser-only app. It answers the app's /api requests with the backend
@@ -35,12 +34,12 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-let backend: Promise<Hono> | null = null;
+let backend: Promise<Backend> | null = null;
 
 async function api(request: Request): Promise<Response> {
   try {
     backend ??= startBackend();
-    return await (await backend).fetch(request);
+    return await (await backend).app.fetch(request);
   } catch (err) {
     backend = null;
     const message = err instanceof Error ? err.message : String(err);
@@ -66,6 +65,11 @@ async function appFile(request: Request): Promise<Response> {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/api/')) event.respondWith(api(event.request));
-  else if (event.request.method === 'GET') event.respondWith(appFile(event.request));
+  if (url.pathname.startsWith('/api/')) {
+    const response = api(event.request);
+    event.respondWith(response);
+    // A browser stops an idle worker after half a minute or so: after a change, stay until the notes'
+    // new versions are kept (a minute after the last change, or a few minutes while changes go on).
+    if (event.request.method !== 'GET') event.waitUntil(response.then(async () => (await backend)?.idle()).catch(() => undefined));
+  } else if (event.request.method === 'GET') event.respondWith(appFile(event.request));
 });

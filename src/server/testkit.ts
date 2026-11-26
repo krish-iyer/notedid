@@ -4,13 +4,14 @@ import path from 'node:path';
 import type { ServerEvent } from '../shared/api.ts';
 import { createApp } from './app.ts';
 import { EventHub } from './events.ts';
-import { GitHistory } from './git.ts';
+import { GitBackup } from './git.ts';
 import { NoteIndex } from './noteIndex.ts';
 import { NoteService } from './notes.ts';
 import { PaperService } from './papers.ts';
 import { SettingsStore } from './settings.ts';
 import { NoteStore } from './storage.ts';
 import { VaultStore } from './vault.ts';
+import { VersionHistory } from './versions.ts';
 import type { FetchFn } from './web.ts';
 import { NodeDisk } from './nodeDisk.ts';
 import { memoryDatabase } from './nodeSqlite.ts';
@@ -20,7 +21,7 @@ export const ORIGIN = 'http://127.0.0.1:4321';
 const offline: FetchFn = async () => new Response('offline', { status: 503 });
 
 /** A complete server over a temporary notes folder, for tests. */
-export async function makeTestServer(options: { fetch?: FetchFn; history?: boolean; files?: Record<string, string> } = {}) {
+export async function makeTestServer(options: { fetch?: FetchFn; git?: boolean; files?: Record<string, string>; versionDelayMs?: number; now?: () => number } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'notesapp-test-'));
   for (const [rel, content] of Object.entries(options.files ?? {})) {
     await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
@@ -31,16 +32,17 @@ export async function makeTestServer(options: { fetch?: FetchFn; history?: boole
   const store = new NoteStore(disk);
   const index = new NoteIndex(memoryDatabase());
   const events = new EventHub();
-  const history = options.history ? new GitHistory(disk.base, { delayMs: 60_000 }) : null;
-  if (history) await history.init();
-  const notes = new NoteService({ store, index, events, history });
+  const versions = new VersionHistory(store, { delayMs: options.versionDelayMs ?? 60_000, now: options.now });
+  const git = options.git ? new GitBackup(disk.base, { delayMs: 60_000 }) : null;
+  if (git) await git.init();
+  const notes = new NoteService({ store, index, events, versions, git });
   await notes.loadAll();
   const vault = new VaultStore(disk);
   const fetchFn = options.fetch ?? offline;
   const papers = new PaperService({ store, index, notes, fetch: fetchFn });
   const settings = new SettingsStore(disk);
   await settings.migrate();
-  const app = createApp({ store, index, events, notes, settings, papers, vault, history, fetch: fetchFn }, { port: 4321, allowedOrigins: [ORIGIN] });
+  const app = createApp({ store, index, events, notes, settings, papers, vault, versions, git, fetch: fetchFn }, { port: 4321, allowedOrigins: [ORIGIN] });
   const received: ServerEvent[] = [];
   events.subscribe((e) => received.push(e));
 
@@ -58,7 +60,8 @@ export async function makeTestServer(options: { fetch?: FetchFn; history?: boole
     notes,
     vault,
     papers,
-    history,
+    versions,
+    git,
     app,
     received,
     get: (url: string) => request('GET', url),

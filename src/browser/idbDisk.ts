@@ -96,9 +96,18 @@ export class IdbDisk implements Disk {
     await done;
   }
 
+  async remove(rel: string): Promise<void> {
+    const tx = this.#db.transaction([DATA, META], 'readwrite');
+    tx.objectStore(DATA).delete(rel);
+    tx.objectStore(META).delete(rel);
+    await committed(tx);
+  }
+
   async list(dir: string): Promise<string[]> {
-    const keys = (await settled(this.#db.transaction(META, 'readonly').objectStore(META).getAllKeys())) as string[];
     const prefix = dir ? `${dir}/` : '';
-    return keys.filter((rel) => rel.startsWith(prefix) && !rel.split('/').some((part) => part.startsWith('.'))).sort();
+    // Only the keys below the folder: every path that starts with "dir/".
+    const range = prefix ? IDBKeyRange.bound(prefix, `${prefix}\uffff`) : undefined;
+    const keys = (await settled(this.#db.transaction(META, 'readonly').objectStore(META).getAllKeys(range))) as string[];
+    return keys.filter((rel) => rel.startsWith(prefix) && !rel.slice(prefix.length).split('/').some((part) => part.startsWith('.'))).sort();
   }
 }

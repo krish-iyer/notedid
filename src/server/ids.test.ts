@@ -1,5 +1,7 @@
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { noteIdOf } from '../shared/noteIds.ts';
 import { makeTestServer } from './testkit.ts';
@@ -9,7 +11,7 @@ const GENERATED = /^[a-z][0-9a-z]{11}$/;
 describe('note ids', () => {
   it('gives ids to notes without one and new ids to copies, changing nothing else', async () => {
     const s = await makeTestServer({
-      history: true,
+      git: true,
       files: {
         'notes/old.md': '# Old\n\nText\n',
         'notes/crlf.md': '---\r\ntype: note\r\n---\r\nBody\r\n',
@@ -43,8 +45,11 @@ describe('note ids', () => {
       expect(await (await s.get('/api/ids')).json()).toEqual({ notes: 5, missing: 0, copies: 0 });
       expect(await (await s.post('/api/ids', {})).json()).toEqual({ added: 0, renewed: 0 });
 
-      // The history keeps it as one step of its own.
-      expect((await s.history?.log('notes/old.md'))?.[0]?.message).toBe('Give 3 notes ids');
+      // The git backup keeps it as one step of its own, and the notes' versions leave it out.
+      const { stdout } = await promisify(execFile)('git', ['log', '-1', '--format=%s'], { cwd: s.dir });
+      expect(stdout.trim()).toBe('Give 3 notes ids');
+      await s.versions.flush();
+      await expect(fs.stat(path.join(s.dir, '.notedid/history'))).rejects.toThrow();
     } finally {
       await s.cleanup();
     }

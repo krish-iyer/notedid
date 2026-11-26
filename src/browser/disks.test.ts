@@ -1,6 +1,7 @@
 import * as fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Disk } from '../server/disk.ts';
@@ -65,7 +66,24 @@ describe.each(makers)('%s', (_name, make) => {
     expect(await disk.list('')).toEqual(['journal/2026-11-26.md', 'notes/a.md', 'notes/b.md', 'vault/k.bin', 'vault/trash/old.bin']);
     expect(await disk.list('vault')).toEqual(['vault/k.bin', 'vault/trash/old.bin']);
     expect(await disk.list('nothing')).toEqual([]);
-    // Hidden files are still there for whoever asks for them by name (settings).
+    // Hidden files are still there for whoever asks for them by name (settings), or lists their folder.
     expect(str(await disk.read('.notedid/settings.json'))).toBe('.notedid/settings.json');
+    await disk.write('.notedid/history/k7q9m2vbfz4r/2026-11-26 14.05.33 UTC.md', text('v'));
+    expect(await disk.list('.notedid/history/k7q9m2vbfz4r')).toEqual(['.notedid/history/k7q9m2vbfz4r/2026-11-26 14.05.33 UTC.md']);
+    expect(await disk.list('.notedid')).toEqual(['.notedid/history/k7q9m2vbfz4r/2026-11-26 14.05.33 UTC.md', '.notedid/settings.json']);
+    // A folder's name is not a prefix of another's.
+    await disk.write('notes2/c.md', text('c'));
+    expect(await disk.list('notes')).toEqual(['notes/a.md', 'notes/b.md']);
+  });
+
+  it('removes a file, and does nothing for a missing one', async () => {
+    const disk = await make();
+    await disk.write('notes/a.md', text('a'));
+    await disk.remove('notes/a.md');
+    expect(await disk.read('notes/a.md')).toBeNull();
+    expect(await disk.stat('notes/a.md')).toBeNull();
+    expect(await disk.list('notes')).toEqual([]);
+    await disk.remove('notes/a.md');
+    await disk.remove('nothing/here.md');
   });
 });

@@ -37,18 +37,19 @@ describe('export and import', () => {
       [`vault/${VAULT_ID}.bin`]: new Uint8Array([1, 2, 3]),
       'vault/key.json': '{"v":1}',
       '.notedid/settings.json': '{"pinned":[]}\n',
+      '.notedid/history/k7q9m2vbfz4r/2026-11-26 14.05.33 UTC.md': '---\nid: k7q9m2vbfz4r\n---\n# A, earlier\n',
     });
     await fs.mkdir(path.join(from.base, '.git'), { recursive: true });
     await fs.writeFile(path.join(from.base, '.git', 'HEAD'), 'ref: refs/heads/main\n');
     const zip = await exportZip(from);
-    expect(Object.keys(unzipSync(zip)).sort()).toEqual(['.notedid/settings.json', 'journal/2026-11-26.md', 'notes/a.md', 'papers/x.highlights.json', 'papers/x.md', 'papers/x.pdf', 'trash/notes/old.md', `vault/${VAULT_ID}.bin`, 'vault/key.json']);
+    expect(Object.keys(unzipSync(zip)).sort()).toEqual(['.notedid/history/k7q9m2vbfz4r/2026-11-26 14.05.33 UTC.md', '.notedid/settings.json', 'journal/2026-11-26.md', 'notes/a.md', 'papers/x.highlights.json', 'papers/x.md', 'papers/x.pdf', 'trash/notes/old.md', `vault/${VAULT_ID}.bin`, 'vault/key.json']);
 
     const to = await folder();
-    expect(await importZip(to, zip)).toEqual({ added: 9, same: 0, kept: [], skipped: [] });
-    for (const rel of await from.list('')) expect(await to.read(rel)).toEqual(await from.read(rel));
+    expect(await importZip(to, zip)).toEqual({ added: 10, same: 0, kept: [], skipped: [] });
+    for (const rel of [...(await from.list('')), ...(await from.list('.notedid'))]) expect(await to.read(rel)).toEqual(await from.read(rel));
     expect(new TextDecoder().decode((await to.read('.notedid/settings.json')) ?? new Uint8Array())).toBe('{"pinned":[]}\n');
     // Importing the same again adds nothing.
-    expect(await importZip(to, zip)).toEqual({ added: 0, same: 9, kept: [], skipped: [] });
+    expect(await importZip(to, zip)).toEqual({ added: 0, same: 10, kept: [], skipped: [] });
   });
 
   it('takes a zipped notes folder, never overwrites, and skips what isn\'t the app\'s', async () => {
@@ -77,8 +78,8 @@ describe('export and import', () => {
   });
 
   it('refuses paths that would leave the folder or hide', () => {
-    for (const bad of ['../x.md', '/etc/passwd.md', 'notes/../../x.md', '.git/config', 'notes/.hidden.md', 'a\\b.md', 'notes/x.exe', 'vault/x.md', '']) expect(importable(bad)).toBe(false);
-    for (const good of ['notes/a.md', 'papers/x.pdf', 'papers/x.highlights.json', '.notedid/settings.json', `vault/${VAULT_ID}.bin`, 'vault/key.json', `vault/trash/${VAULT_ID}-1732600000000.bin`]) expect(importable(good)).toBe(true);
+    for (const bad of ['../x.md', '/etc/passwd.md', 'notes/../../x.md', '.git/config', 'notes/.hidden.md', 'a\\b.md', 'notes/x.exe', 'vault/x.md', '.notedid/history/k7q9m2vbfz4r/x.md', '.notedid/other.json', '']) expect(importable(bad)).toBe(false);
+    for (const good of ['notes/a.md', 'papers/x.pdf', 'papers/x.highlights.json', '.notedid/settings.json', '.notedid/history/k7q9m2vbfz4r/2026-11-26 14.05.33 UTC.md', `vault/${VAULT_ID}.bin`, 'vault/key.json', `vault/trash/${VAULT_ID}-1732600000000.bin`]) expect(importable(good)).toBe(true);
   });
 });
 

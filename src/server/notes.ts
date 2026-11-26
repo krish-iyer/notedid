@@ -8,10 +8,11 @@ import { slugify, uniqueName } from '../shared/slug.ts';
 import { toggleTaskLine } from '../shared/tasks.ts';
 import { stemOf } from './analyze.ts';
 import type { EventHub } from './events.ts';
-import type { GitHistory } from './git.ts';
+import type { GitBackup } from './git.ts';
 import { findMention, type NoteIndex } from './noteIndex.ts';
 import { dirname, join, relative as relativePath } from './posixPath.ts';
 import { ConflictError, hashContent, type NoteStore, normalizeNotePath, PathError } from './storage.ts';
+import type { VersionHistory } from './versions.ts';
 
 /** A request that can't be carried out as asked (bad input, or the thing isn't there). */
 export class NotFoundError extends Error {
@@ -26,18 +27,27 @@ export interface NoteServiceDeps {
   store: NoteStore;
   index: NoteIndex;
   events: EventHub;
-  history: GitHistory | null;
+  /** The notes' versions. */
+  versions: VersionHistory;
+  /** A backup of the whole folder, where git is installed. */
+  git: GitBackup | null;
+}
+
+export interface SaveOptions {
+  /** False for a change that isn't worth a version of its own (giving a note an id). */
+  version?: boolean;
 }
 
 /**
- * Every change to notes goes through here, so the index, the open browsers (events) and the
- * history always hear about it.
+ * Every change to notes goes through here, so the index, the open browsers (events), the notes'
+ * versions and the backup always hear about it.
  */
 export class NoteService {
   readonly #store: NoteStore;
   readonly #index: NoteIndex;
   readonly #events: EventHub;
-  readonly #history: GitHistory | null;
+  readonly #versions: VersionHistory;
+  readonly #git: GitBackup | null;
   readonly #captured = new Map<string, string>();
   #rescanTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -45,7 +55,8 @@ export class NoteService {
     this.#store = deps.store;
     this.#index = deps.index;
     this.#events = deps.events;
-    this.#history = deps.history;
+    this.#versions = deps.versions;
+    this.#git = deps.git;
   }
 
   static indexable(rel: string): boolean {
@@ -59,20 +70,27 @@ export class NoteService {
     return paths.length;
   }
 
-  async save(rel: string, content: string, baseHash: string | null): Promise<{ path: string; hash: string }> {
+  async save(rel: string, content: string, baseHash: string | null, options: SaveOptions = {}): Promise<{ path: string; hash: string }> {
+    const version = options.version !== false && NoteService.indexable(rel);
+    if (version) await this.#versions.beforeChange(rel);
     const saved = await this.#store.write(rel, content, baseHash);
-    this.#afterWrite(saved.path, content, saved.hash);
+    this.#afterWrite(saved.path, content, saved.hash, version);
     return saved;
   }
 
-  #afterWrite(rel: string, content: string, hash: string): void {
+  #afterWrite(rel: string, content: string, hash: string, version = true): void {
     if (NoteService.indexable(rel)) this.#index.upsert(rel, content, Date.now(), hash);
     this.#events.emit({ type: 'changed', path: rel, hash });
-    this.#history?.touch();
+    if (version && NoteService.indexable(rel)) this.#versions.touch(rel);
+    this.#git?.touch();
   }
 
-  /** Re-reads a note after a change on disk (from another editor, a sync tool, …). */
-  async refresh(rel: string, options: { quiet?: boolean } = {}): Promise<void> {
+  /**
+   * Re-reads a note after a change on disk (from another editor, a sync tool, …). `quiet` tells no
+   * one (loading at start); `version: false` keeps no version of the change (notes that came with
+   * their own history, from an import).
+   */
+  async refresh(rel: string, options: { quiet?: boolean; version?: boolean } = {}): Promise<void> {
     if (!NoteService.indexable(rel)) return;
     let doc;
     try {
@@ -85,7 +103,7 @@ export class NoteService {
       if (known !== null) {
         this.#index.remove(rel);
         this.#events.emit({ type: 'deleted', path: rel });
-        this.#history?.touch();
+        this.#git?.touch();
       }
       return;
     }
@@ -94,15 +112,16 @@ export class NoteService {
     this.#index.upsert(rel, doc.content, stat?.mtime ?? Date.now(), doc.hash);
     if (!options.quiet) {
       this.#events.emit({ type: 'changed', path: rel, hash: doc.hash });
-      this.#history?.touch();
+      if (options.version !== false) this.#versions.touch(rel);
+      this.#git?.touch();
     }
   }
 
-  /** Brings the index in line with the folder (after folder moves, which file events don't spell out). */
-  async rescan(): Promise<void> {
+  /** Brings the index in line with the folder (after folder moves, which file events don't spell out, or an import). */
+  async rescan(options: { version?: boolean } = {}): Promise<void> {
     const onDisk = new Set((await this.#store.list(['.md'])).filter(NoteService.indexable));
-    for (const rel of onDisk) await this.refresh(rel);
-    for (const rel of this.#index.paths()) if (!onDisk.has(rel)) await this.refresh(rel);
+    for (const rel of onDisk) await this.refresh(rel, options);
+    for (const rel of this.#index.paths()) if (!onDisk.has(rel)) await this.refresh(rel, options);
   }
 
   /** Handles a file-system event; `rel` is null or a folder when the watcher can't say what changed. */
@@ -116,13 +135,13 @@ export class NoteService {
   }
 
   /** Reads, changes and saves a note, retrying if it changes in between. `change` returns null to leave it as is. */
-  async #edit(rel: string, change: (content: string, exists: boolean) => string | null): Promise<{ hash: string | null }> {
+  async #edit(rel: string, change: (content: string, exists: boolean) => string | null, options: SaveOptions = {}): Promise<{ hash: string | null }> {
     for (let attempt = 0; ; attempt++) {
       const doc = await this.#store.read(rel);
       const next = change(doc.content, doc.hash !== null);
       if (next === null || (doc.hash !== null && next === doc.content)) return { hash: doc.hash };
       try {
-        return await this.save(rel, next, doc.hash);
+        return await this.save(rel, next, doc.hash, options);
       } catch (err) {
         if (!(err instanceof ConflictError) || attempt >= 4) throw err;
       }
@@ -172,8 +191,8 @@ export class NoteService {
 
   /**
    * Gives every note without an id one, and every copy (a note sharing another's id) a new one. Only
-   * the `id:` line changes. Pending edits are committed to the history first, so this is a commit
-   * of its own.
+   * the `id:` line changes, so no versions are kept for it (a note's first version is kept when it
+   * next changes). In the git backup, pending edits are committed first, so this is a commit of its own.
    */
   async assignIds(): Promise<{ added: number; renewed: number }> {
     const { missing, copies, taken } = await this.#idReport();
@@ -183,27 +202,35 @@ export class NoteService {
       taken.add(id);
       return id;
     };
-    await this.#history?.commitNow();
+    await this.#git?.commitNow();
     let added = 0;
     for (const rel of missing) {
       let changed = false;
-      await this.#edit(rel, (content, exists) => {
-        changed = exists && noteIdOf(content) === null;
-        return changed ? withNoteId(content, fresh()) : null;
-      });
+      await this.#edit(
+        rel,
+        (content, exists) => {
+          changed = exists && noteIdOf(content) === null;
+          return changed ? withNoteId(content, fresh()) : null;
+        },
+        { version: false },
+      );
       if (changed) added++;
     }
     let renewed = 0;
     for (const rel of copies) {
       const id = noteIdOf((await this.#store.read(rel)).content);
       let changed = false;
-      await this.#edit(rel, (content, exists) => {
-        changed = exists && id !== null && noteIdOf(content) === id;
-        return changed ? setFrontmatterField(content, 'id', fresh()) : null;
-      });
+      await this.#edit(
+        rel,
+        (content, exists) => {
+          changed = exists && id !== null && noteIdOf(content) === id;
+          return changed ? setFrontmatterField(content, 'id', fresh()) : null;
+        },
+        { version: false },
+      );
       if (changed) renewed++;
     }
-    if (added + renewed > 0) await this.#history?.commitNow(`Give ${added + renewed === 1 ? 'a note an id' : `${added + renewed} notes ids`}`);
+    if (added + renewed > 0) await this.#git?.commitNow(`Give ${added + renewed === 1 ? 'a note an id' : `${added + renewed} notes ids`}`);
     return { added, renewed };
   }
 
@@ -290,7 +317,7 @@ export class NoteService {
     await this.#store.move(rel, target);
     this.#index.remove(rel);
     this.#events.emit({ type: 'deleted', path: rel });
-    this.#history?.touch();
+    this.#git?.touch();
     return target;
   }
 
@@ -356,9 +383,17 @@ export class NoteService {
     return result;
   }
 
-  /** Saves an earlier version of a note as its newest version. */
+  /**
+   * Makes an earlier version of a note its current text. The text it replaces is kept as a version
+   * first, however new, and the note keeps its id whatever the version says.
+   */
   async restore(rel: string, content: string): Promise<{ hash: string | null }> {
-    return this.#edit(rel, () => content);
+    await this.#versions.beforeChange(rel, { always: true });
+    return this.#edit(rel, (current) => {
+      const id = noteIdOf(current);
+      if (id === null || noteIdOf(content) === id) return content;
+      return noteIdOf(content) === null ? withNoteId(content, id) : setFrontmatterField(content, 'id', id);
+    });
   }
 
   /** Changes a note with `change` (null leaves it alone), retrying if it changes in between. */

@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import type { BacklinksResponse, HistoryEntry } from '../../shared/api.ts';
+import type { BacklinksResponse, HistoryEntry, HistoryResponse } from '../../shared/api.ts';
 import { type DiffPart, diffStats, diffText } from '../../shared/diff.ts';
 import { analyzeBody, lineIndex, splitFrontmatter } from '../../shared/markdown.ts';
+import { giveNotesIds } from '../actions.ts';
 import { api, fetchNote } from '../api.ts';
 import { askConfirm } from '../dialogs.ts';
 import { compareEditor, scrollEditorTo } from '../editor/registry.ts';
@@ -156,29 +157,30 @@ function whenLabel(date: string): string {
  * `onShowChanges` is called when the changes are shown, for a page that has to switch to the note.
  */
 export function HistoryTab({ path, current, onShowChanges }: { path: string; current?: string; onShowChanges?: () => void }) {
-  const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
+  const [log, setLog] = useState<HistoryResponse | 'failed' | null>(null);
   const [viewing, setViewing] = useState<{ entry: HistoryEntry; content: string; now: string; inEditor: boolean } | null>(null);
   const [mode, setMode] = useState<'changes' | 'version'>('changes');
+  const [loads, setLoads] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     const load = () =>
       void api
         .history(path)
-        .then((e) => !cancelled && setEntries(e))
-        .catch(() => !cancelled && setEntries([]));
+        .then((l) => !cancelled && setLog(l))
+        .catch(() => !cancelled && setLog('failed'));
     load();
-    // New versions are committed a little after you stop typing.
+    // New versions are kept a minute or so after you stop typing.
     const timer = setInterval(load, 30_000);
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [path]);
+  }, [path, loads]);
 
   const open = async (entry: HistoryEntry) => {
     try {
-      const [version, now] = await Promise.all([api.version(entry.path, entry.commit), current === undefined ? fetchNote(path).then((d) => d.content) : Promise.resolve(current)]);
+      const [version, now] = await Promise.all([api.version(path, entry.version), current === undefined ? fetchNote(path).then((d) => d.content) : Promise.resolve(current)]);
       const inEditor = compareEditor(path, { text: version.content, label: whenLabel(entry.date) });
       setViewing({ entry, content: version.content, now, inEditor });
       setMode('changes');
@@ -201,24 +203,36 @@ export function HistoryTab({ path, current, onShowChanges }: { path: string; cur
     const ok = await askConfirm({ title: 'Restore this version?', message: 'It becomes the current text. The version you have now stays in the history.', confirmLabel: 'Restore' });
     if (!ok) return;
     try {
-      await api.restoreNote(path, viewing.entry.commit, viewing.entry.path);
+      await api.restoreNote(path, viewing.entry.version);
       compareEditor(path, null);
       setViewing(null);
+      setLoads((n) => n + 1);
       showToast('Restored');
     } catch (err) {
       showToast(`Could not restore: ${messageOf(err)}`, 'error');
     }
   };
 
-  if (!entries) return <p className="muted panel-body">Loading…</p>;
-  if (entries.length === 0) return <p className="muted small panel-body">No saved versions yet. Changes are added to the history about a minute after you stop typing.</p>;
+  if (!log) return <p className="muted panel-body">Loading…</p>;
+  if (log === 'failed') return <p className="muted small panel-body">Could not load this note’s history.</p>;
+  if (log.id === null)
+    return (
+      <div className="panel-body">
+        <p className="muted small">This note has no ID yet, so no versions of it are kept. An ID is a permanent name for a note, which its history and syncing go by.</p>
+        <button type="button" onClick={() => void giveNotesIds().then(() => setLoads((n) => n + 1))}>
+          Give notes IDs…
+        </button>
+      </div>
+    );
+  const entries = log.versions;
+  if (entries.length === 0) return <p className="muted small panel-body">No versions yet. Once you edit this note, its versions appear here: the text from before your edit, and a new version a minute or so after you stop typing.</p>;
   const unchangedSince = viewing !== null && viewing.content === viewing.now;
   return (
     <div className="panel-body">
       <ul className="history-list">
         {entries.map((e) => (
-          <li key={e.commit}>
-            <button type="button" className={viewing?.entry.commit === e.commit ? 'history-item active' : 'history-item'} onClick={() => void open(e)}>
+          <li key={e.version}>
+            <button type="button" className={viewing?.entry.version === e.version ? 'history-item active' : 'history-item'} onClick={() => void open(e)}>
               <span>{timeAgo(Date.parse(e.date))}</span>
               <span className="muted small">{new Date(e.date).toLocaleString()}</span>
             </button>

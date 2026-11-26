@@ -104,13 +104,19 @@ export interface TagCount {
   count: number;
 }
 
+/** One kept version of a note. */
 export interface HistoryEntry {
-  commit: string;
-  /** ISO timestamp. */
+  /** Its name: when the note had that text, in UTC (`2026-11-26 14.05.33 UTC`). */
+  version: string;
+  /** The same moment as an ISO timestamp. */
   date: string;
-  message: string;
-  /** The file's path in that version (it may have been renamed since). */
-  path: string;
+}
+
+export interface HistoryResponse {
+  /** The note's id, or null: a note without one has no versions. */
+  id: string | null;
+  /** Newest first. */
+  versions: HistoryEntry[];
 }
 
 export interface SavedView {

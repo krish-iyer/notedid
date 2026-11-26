@@ -170,7 +170,7 @@ export async function giveNotesIds(): Promise<void> {
     const what = [missing ? `${missing} note${missing === 1 ? '' : 's'} without one` : '', copies ? `${copies} cop${copies === 1 ? 'y' : 'ies'} sharing another note’s` : ''].filter(Boolean).join(' and ');
     const ok = await askConfirm({
       title: 'Give every note an ID?',
-      message: `An ID is a permanent name for a note that stays the same when you rename or move it, which syncing between devices relies on. This adds one line (id: and 12 random letters and digits) to the front matter of ${what}. Nothing else in your notes changes, and the history keeps this as one step.`,
+      message: `An ID is a permanent name for a note that stays the same when you rename or move it. A note's history and syncing between devices go by it. This adds one line (id: and 12 random letters and digits) to the front matter of ${what}. Nothing else in your notes changes.`,
       confirmLabel: 'Add IDs',
     });
     if (!ok) return;

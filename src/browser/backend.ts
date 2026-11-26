@@ -10,6 +10,7 @@ import { PaperService } from '../server/papers.ts';
 import { SettingsStore } from '../server/settings.ts';
 import { NoteStore } from '../server/storage.ts';
 import { VaultStore } from '../server/vault.ts';
+import { VersionHistory } from '../server/versions.ts';
 import type { FetchFn } from '../server/web.ts';
 import { IdbDisk, openNotesDatabase } from './idbDisk.ts';
 import { wasmDatabase } from './wasmSqlite.ts';
@@ -21,18 +22,26 @@ const browserFetch: FetchFn = (input, init) => {
   return fetch(input, { ...init, headers });
 };
 
+export interface Backend {
+  /** Answers the app's /api requests. */
+  app: Hono;
+  /** Settles once the versions of the notes changed so far are kept. */
+  idle: () => Promise<void>;
+}
+
 /**
  * The app's backend, in the browser: the same code as the server's, with the notes in IndexedDB
  * and the search index in SQLite compiled to WebAssembly. It answers the same /api requests.
- * There is no git here, so no history yet.
+ * There is no git here; the notes' versions are kept as files like everywhere else.
  */
-export async function startBackend(): Promise<Hono> {
+export async function startBackend(): Promise<Backend> {
   const disk = new IdbDisk(await openNotesDatabase());
   const store = new NoteStore(disk);
   const sqlite3 = await (sqlite3InitModule as unknown as (options: { locateFile: () => string }) => ReturnType<typeof sqlite3InitModule>)({ locateFile: () => wasmUrl });
   const index = new NoteIndex(wasmDatabase(sqlite3));
   const events = new EventHub();
-  const notes = new NoteService({ store, index, events, history: null });
+  const versions = new VersionHistory(store);
+  const notes = new NoteService({ store, index, events, versions, git: null });
   await notes.loadAll();
   const vault = new VaultStore(disk);
   const papers = new PaperService({ store, index, notes, fetch: browserFetch });
@@ -40,8 +49,9 @@ export async function startBackend(): Promise<Hono> {
   await settings.migrate();
   const channel = new BroadcastChannel(EVENTS_CHANNEL);
   events.subscribe((event) => channel.postMessage(event));
-  return createApp(
-    { store, index, events, notes, settings, papers, vault, history: null, fetch: browserFetch },
+  const app = createApp(
+    { store, index, events, notes, settings, papers, vault, versions, git: null, fetch: browserFetch },
     { port: Number(location.port) || (location.protocol === 'https:' ? 443 : 80), hosts: [location.host], allowedOrigins: [location.origin] },
   );
+  return { app, idle: () => versions.idle() };
 }

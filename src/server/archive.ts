@@ -2,6 +2,7 @@ import { unzipSync, type Zippable, zipSync } from 'fflate';
 import type { Disk } from './disk.ts';
 import { SettingsStore } from './settings.ts';
 import { DATA_EXTENSIONS, FILE_EXTENSIONS, NOTE_EXTENSIONS, normalizePath, PathError } from './storage.ts';
+import { HISTORY_FOLDER, isVersionFile } from './versions.ts';
 
 /**
  * The whole notes folder as one zip, and back: a backup you can keep anywhere, and the way notes get
@@ -15,19 +16,19 @@ const COMPRESSED = /\.(pdf|png|jpe?g|gif|webp)$/i;
 const VAULT_FILE = /^vault\/(key\.json|[0-9a-f]{32}\.bin|trash\/[0-9a-f]{32}-\d+\.bin)$/;
 const EXTENSIONS = [...NOTE_EXTENSIONS, ...DATA_EXTENSIONS, ...FILE_EXTENSIONS];
 
-/** Every file in the notes folder: notes, PDFs and pictures, data, the trash, the vault (still encrypted) and the settings. */
+/** Every file in the notes folder: notes, PDFs and pictures, data, the trash, the vault (still encrypted), the settings and the notes' versions. */
 export async function exportZip(disk: Disk): Promise<Uint8Array> {
   const files: Zippable = {};
-  for (const rel of [...(await disk.list('')), SettingsStore.FILE]) {
+  for (const rel of [...(await disk.list('')), SettingsStore.FILE, ...(await disk.list(HISTORY_FOLDER))]) {
     const bytes = await disk.read(rel);
     if (bytes) files[rel] = [bytes, { level: COMPRESSED.test(rel) ? 0 : 6 }];
   }
   return zipSync(files);
 }
 
-/** A file an import may add: the app's kinds of files, its vault files and its settings; nothing hidden or outside. */
+/** A file an import may add: the app's kinds of files, its vault files, its settings and versions; nothing else hidden, nothing outside. */
 export function importable(rel: string): boolean {
-  if (rel === SettingsStore.FILE || VAULT_FILE.test(rel)) return true;
+  if (rel === SettingsStore.FILE || VAULT_FILE.test(rel) || isVersionFile(rel)) return true;
   try {
     return normalizePath(rel, EXTENSIONS) === rel;
   } catch {

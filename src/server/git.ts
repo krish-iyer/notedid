@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
-import { realpath } from 'node:fs/promises';
-import type { HistoryEntry } from '../shared/api.ts';
+import { appendFile, mkdir, readFile, realpath } from 'node:fs/promises';
+import path from 'node:path';
 
 const GIT_ENV = {
   GIT_AUTHOR_NAME: 'notedid',
@@ -20,18 +20,23 @@ function git(args: string[], cwd: string): Promise<string> {
   });
 }
 
-export interface HistoryOptions {
+export interface BackupOptions {
   /** Commit this long after the last change. */
   delayMs?: number;
   /** …but at least this often while changes keep coming. */
   maxWaitMs?: number;
 }
 
+/** Files git leaves alone: the notes' versions are copies of the notes, which git has already. */
+const IGNORED = ['/.notedid/history/'];
+
 /**
- * Keeps the notes folder's history in its own git repository: every change is committed a
- * little while after typing stops, so any earlier version can be looked at and restored.
+ * A backup of the whole notes folder in its own git repository, where git is installed (the
+ * server; not the browser): every change is committed a little while after typing stops. The app
+ * shows the notes' versions (`versions.ts`); this keeps everything else's past too (files, data,
+ * the vault, settings), for `git log` and friends.
  */
-export class GitHistory {
+export class GitBackup {
   readonly #dir: string;
   readonly #delayMs: number;
   readonly #maxWaitMs: number;
@@ -40,7 +45,7 @@ export class GitHistory {
   #pendingSince: number | null = null;
   #queue: Promise<unknown> = Promise.resolve();
 
-  constructor(dir: string, options: HistoryOptions = {}) {
+  constructor(dir: string, options: BackupOptions = {}) {
     this.#dir = dir;
     this.#delayMs = options.delayMs ?? 60_000;
     this.#maxWaitMs = Math.max(this.#delayMs, options.maxWaitMs ?? 180_000);
@@ -64,9 +69,21 @@ export class GitHistory {
     );
     // A repository further up (e.g. the code repository around dev-notes) must not receive the notes.
     if (top !== (await realpath(this.#dir))) await git(['init', '-q', '-b', 'main'], this.#dir);
+    await this.#ignore();
     this.#enabled = true;
     await this.commitNow('Notes as they were when history started');
     return true;
+  }
+
+  /** Adds IGNORED to the repository's own exclude file (which isn't a file in the notes folder). */
+  async #ignore(): Promise<void> {
+    const file = path.resolve(this.#dir, (await git(['rev-parse', '--git-path', 'info/exclude'], this.#dir)).trim());
+    const lines = (await readFile(file, 'utf8').catch(() => '')).split(/\r?\n/);
+    const missing = IGNORED.filter((line) => !lines.includes(line));
+    if (missing.length === 0) return;
+    await mkdir(path.dirname(file), { recursive: true });
+    const before = lines.join('\n');
+    await appendFile(file, `${before && !before.endsWith('\n') ? '\n' : ''}${missing.join('\n')}\n`);
   }
 
   /** Schedules a commit once changes have settled (or after a few minutes of non-stop changes). */
@@ -98,36 +115,6 @@ export class GitHistory {
     const result = this.#queue.then(run, run);
     this.#queue = result.catch(() => undefined);
     return result;
-  }
-
-  /** Versions of a file, newest first, following renames. */
-  async log(rel: string, limit = 50): Promise<HistoryEntry[]> {
-    if (!this.#enabled) return [];
-    let out: string;
-    try {
-      out = await git(['log', `-n${limit}`, '--follow', '--name-only', '--format=%x1e%H%x1f%aI%x1f%s', '--', rel], this.#dir);
-    } catch {
-      return [];
-    }
-    return out
-      .split('\x1e')
-      .filter((chunk) => chunk.trim())
-      .map((chunk) => {
-        const [header = '', ...rest] = chunk.split('\n');
-        const [commit = '', date = '', message = ''] = header.split('\x1f');
-        const pathAtCommit = rest.map((l) => l.trim()).filter(Boolean).pop() ?? rel;
-        return { commit, date, message, path: pathAtCommit };
-      });
-  }
-
-  /** A file's content at a commit, or null if it didn't exist there. */
-  async show(commit: string, rel: string): Promise<string | null> {
-    if (!this.#enabled || !/^[0-9a-f]{7,64}$/.test(commit)) return null;
-    try {
-      return await git(['show', `${commit}:${rel}`], this.#dir);
-    } catch {
-      return null;
-    }
   }
 
   /** Commits anything pending (used when shutting down). */

@@ -9,7 +9,7 @@ import { parseQuery } from '../shared/query.ts';
 import { slugify, tagify } from '../shared/slug.ts';
 import { exportZip, importZip } from './archive.ts';
 import type { EventHub } from './events.ts';
-import type { GitHistory } from './git.ts';
+import type { GitBackup } from './git.ts';
 import type { NoteIndex } from './noteIndex.ts';
 import { basename, extname } from './posixPath.ts';
 import { NotFoundError, type NoteService } from './notes.ts';
@@ -17,6 +17,7 @@ import { type PaperService, UpstreamError } from './papers.ts';
 import type { SettingsStore } from './settings.ts';
 import { ConflictError, DATA_EXTENSIONS, EncodingError, FILE_EXTENSIONS, type NoteStore, normalizeNotePath, normalizePath, PathError } from './storage.ts';
 import { VaultConflict, type VaultStore } from './vault.ts';
+import type { VersionHistory } from './versions.ts';
 import { type FetchFn, fetchPageTitle } from './web.ts';
 
 const MB = 1024 * 1024;
@@ -39,7 +40,10 @@ export interface AppContext {
   settings: SettingsStore;
   papers: PaperService;
   vault: VaultStore;
-  history: GitHistory | null;
+  /** The notes' versions. */
+  versions: VersionHistory;
+  /** A backup of the whole folder, where git is installed. */
+  git: GitBackup | null;
   fetch: FetchFn;
 }
 
@@ -108,7 +112,7 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
   const smallBody = bodyLimit({ maxSize: 8 * MB, onError: (c) => c.json({ error: 'Too large' } satisfies ErrorResponse, 413) });
   const uploadBody = bodyLimit({ maxSize: 100 * MB, onError: (c) => c.json({ error: 'The file is larger than 100 MB' } satisfies ErrorResponse, 413) });
 
-  app.get('/api/health', (c) => c.json({ ok: true, notes: ctx.index.size, history: ctx.history !== null }));
+  app.get('/api/health', (c) => c.json({ ok: true, notes: ctx.index.size, git: ctx.git !== null }));
 
   // ---- Notes -------------------------------------------------------------------------------
 
@@ -144,10 +148,11 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
   });
 
   app.post('/api/note/restore', smallBody, async (c) => {
-    const body = await jsonBody<{ path: string; commit: string; versionPath: string }>(c, { path: 'string', commit: 'string', versionPath: 'string' });
-    const content = await ctx.history?.show(body.commit, normalizeNotePath(body.versionPath));
-    if (content === null || content === undefined) throw new NotFoundError('That version is not in the history');
-    return c.json(await ctx.notes.restore(normalizeNotePath(body.path), content));
+    const body = await jsonBody<{ path: string; version: string }>(c, { path: 'string', version: 'string' });
+    const rel = normalizeNotePath(body.path);
+    const content = await ctx.versions.show(rel, body.version);
+    if (content === null) throw new NotFoundError('That version is not in the history');
+    return c.json(await ctx.notes.restore(rel, content));
   });
 
   app.get('/api/notes', (c) => c.json(ctx.index.list()));
@@ -183,11 +188,11 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
 
   // ---- History, settings, live events -------------------------------------------------------------
 
-  app.get('/api/history', async (c) => c.json(ctx.history ? await ctx.history.log(normalizeNotePath(c.req.query('path'))) : []));
+  app.get('/api/history', async (c) => c.json(await ctx.versions.log(normalizeNotePath(c.req.query('path')))));
 
   app.get('/api/history/version', async (c) => {
-    const content = await ctx.history?.show(c.req.query('commit') ?? '', normalizeNotePath(c.req.query('path')));
-    if (content === null || content === undefined) throw new NotFoundError('That version is not in the history');
+    const content = await ctx.versions.show(normalizeNotePath(c.req.query('path')), c.req.query('version') ?? '');
+    if (content === null) throw new NotFoundError('That version is not in the history');
     return c.json({ content });
   });
 
@@ -196,7 +201,7 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
   app.put('/api/settings', smallBody, async (c) => {
     const body = await jsonBody<Record<string, unknown>>(c, {});
     const saved = await ctx.settings.save(body);
-    ctx.history?.touch();
+    ctx.git?.touch();
     ctx.events.emit({ type: 'settings' });
     return c.json(saved);
   });
@@ -246,7 +251,7 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     const suffix = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(3)), (b) => b.toString(16).padStart(2, '0')).join('');
     const rel = `files/${new Date().getFullYear()}/${base}-${suffix}${ext}`;
     await ctx.store.createBytes(rel, new Uint8Array(await file.arrayBuffer()));
-    ctx.history?.touch();
+    ctx.git?.touch();
     return c.json({ path: rel });
   });
 
@@ -268,7 +273,7 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     const body = await jsonBody<{ path: string; data: unknown; baseHash: string | null }>(c, { path: 'string', data: 'any', baseHash: 'string|null' });
     const rel = normalizePath(body.path, DATA_EXTENSIONS);
     const saved = await ctx.store.writeText(rel, `${JSON.stringify(body.data, null, 2)}\n`, body.baseHash);
-    ctx.history?.touch();
+    ctx.git?.touch();
     return c.json(saved);
   });
 
@@ -285,8 +290,10 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
   app.post('/api/import', bodyLimit({ maxSize: 1024 * MB, onError: (c) => c.json({ error: 'The zip is larger than 1 GB' } satisfies ErrorResponse, 413) }), async (c) => {
     if (c.req.header('content-type') !== 'application/zip') throw new BadRequest('Expected a zip file');
     const result = await importZip(ctx.store.disk, new Uint8Array(await c.req.arrayBuffer()));
-    await ctx.notes.rescan();
-    ctx.history?.touch();
+    // The notes come as they are, with whatever versions came with them.
+    ctx.versions.forget();
+    await ctx.notes.rescan({ version: false });
+    ctx.git?.touch();
     // Settings or a vault may have come with the notes.
     ctx.events.emit({ type: 'settings' });
     ctx.events.emit({ type: 'vault' });
@@ -327,7 +334,7 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
   app.put('/api/vault/key', smallBody, async (c) => {
     const body = await jsonBody<{ text: string; baseHash: string | null }>(c, { text: 'string', baseHash: 'string|null' });
     const saved = await ctx.vault.saveKeyFile(body.text, body.baseHash);
-    ctx.history?.touch();
+    ctx.git?.touch();
     return c.json(saved);
   });
 
@@ -343,14 +350,14 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     if (c.req.header('content-type') !== 'application/octet-stream') throw new BadRequest('Expected application/octet-stream');
     const bytes = new Uint8Array(await c.req.arrayBuffer());
     const saved = await ctx.vault.write(c.req.param('id'), bytes, c.req.header('x-base-hash') || null);
-    ctx.history?.touch();
+    ctx.git?.touch();
     ctx.events.emit({ type: 'vault' });
     return c.json(saved);
   });
 
   app.delete('/api/vault/item/:id', async (c) => {
     await ctx.vault.remove(c.req.param('id'));
-    ctx.history?.touch();
+    ctx.git?.touch();
     ctx.events.emit({ type: 'vault' });
     return c.json({ ok: true });
   });
