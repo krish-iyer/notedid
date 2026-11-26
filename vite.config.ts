@@ -7,6 +7,8 @@ const webPort = parsePort('WEB_PORT', process.env.WEB_PORT, DEFAULT_WEB_PORT);
 
 export default defineConfig({
   plugins: [react()],
+  // This is the app with its server; vite.browser.config.ts builds the one that runs in a browser alone.
+  define: { __BROWSER_APP__: 'false' },
   build: {
     outDir: 'dist/web',
     emptyOutDir: true,

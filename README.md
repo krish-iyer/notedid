@@ -25,6 +25,20 @@ make start NOTES_HOST_DIR=$HOME/notes
 
 The app is published on this machine's localhost only, because there is no login yet. Login comes with the phone milestone, which is postponed. The first `make` writes a gitignored `.env` with your uid, gid and time zone.
 
+### Without a server: the browser-only app
+
+The same app can also run entirely in a browser, with no server: a service worker answers the app's requests, the notes live in the browser's storage (IndexedDB), and search runs on SQLite compiled to WebAssembly. It works offline, and it is plain static files, so it can be hosted anywhere (GitHub Pages, say).
+
+```sh
+make browser  # build it and serve it → http://localhost:4323
+```
+
+Notes there are kept in that browser only, separately from the Docker version's folder. Syncing between devices (through Dropbox) is the next step. Until then, a few things differ:
+
+- There is no version history yet (git needs a server). It comes back with the sync work.
+- Adding an arXiv paper gets its details from DataCite, because arXiv's own service doesn't answer browser requests. The PDF still comes from arXiv.
+- A pasted link stays a plain URL: most websites don't let a browser app read their page titles.
+
 ## What it does
 
 **Capture.** Today's journal note is the home screen. Press **Ctrl+K** anywhere to find any note. In that box, **Shift+Enter** creates a note from what you typed, and **Alt+Enter** adds it to today. In the editor:
@@ -151,7 +165,8 @@ The ports can be changed with `WEB_PORT` (web client, default 4322) and `PORT` (
 | Path | What |
 |---|---|
 | `src/shared` | Markdown parsing (links, tags, tasks), search queries, boards, tables, dates; used by both sides |
-| `src/server` | HTTP API (Hono), file storage, search index (SQLite FTS5), git history, papers, vault storage |
+| `src/server` | HTTP API (Hono), file storage, search index (SQLite FTS5), git history, papers, vault storage. All of it but the Node parts (`nodeDisk.ts`, `nodeSqlite.ts`, git, the file watcher, `main.ts`) also runs in the browser-only app |
+| `src/browser` | The browser-only app's backend: the service worker, notes in IndexedDB (`idbDisk.ts`), SQLite in WebAssembly |
 | `src/web` | React client: CodeMirror editor, screens, PDF viewer (PDF.js), vault crypto |
 | `docs/SPEC.md` | Design, milestones and build notes |
 | `Dockerfile`, `compose.yaml`, `Makefile` | The Docker development setup |

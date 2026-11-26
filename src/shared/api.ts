@@ -125,6 +125,9 @@ export interface Settings {
   vaultAutoLockMinutes: number;
 }
 
+/** In the browser-only app, the channel the backend (a service worker) reports changes on. */
+export const EVENTS_CHANNEL = 'notesapp-events';
+
 export type ServerEvent =
   | { type: 'changed'; path: string; hash: string }
   | { type: 'deleted'; path: string }

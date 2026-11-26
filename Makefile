@@ -1,6 +1,7 @@
 # Development commands. Everything runs in Docker (Node 26) as your own user; see README.md.
 #
 #   make dev      start the app at http://localhost:4322 (Ctrl-C stops it)
+#   make browser  build the browser-only app and serve it at http://localhost:4323 (notes stay in the browser)
 #   make start    start the app in the background; `make logs` follows its output
 #   make down     stop and remove the app container
 #   make check    type-check, run the tests and build
@@ -17,7 +18,7 @@ RUN := $(COMPOSE) run --rm dev
 DEPS := node_modules/.package-lock.json
 SETUP := .env $(NOTES_HOST_DIR)
 
-.PHONY: dev start logs check test typecheck build shell down image
+.PHONY: dev start logs check test typecheck build browser shell down image
 
 dev: $(DEPS) | $(SETUP)
 	$(COMPOSE) up dev
@@ -40,6 +41,12 @@ typecheck: $(DEPS) | $(SETUP)
 
 build: $(DEPS) | $(SETUP)
 	$(RUN) npm run build
+
+# The browser-only app: static files plus a service worker that stands in for the server.
+BROWSER_PORT ?= 4323
+browser: $(DEPS) | $(SETUP)
+	$(COMPOSE) run --rm -p "127.0.0.1:$(BROWSER_PORT):$(BROWSER_PORT)" -e WEB_HOST=0.0.0.0 -e BROWSER_PORT=$(BROWSER_PORT) dev \
+		sh -c "npm run build:browser && npm run preview:browser"
 
 shell: | $(SETUP)
 	$(RUN) bash

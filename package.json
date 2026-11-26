@@ -12,11 +12,13 @@
     "dev:server": "tsx watch src/server/main.ts",
     "dev:web": "vite",
     "build": "vite build",
+    "build:browser": "vite build --config vite.browser.config.ts && vite build --config vite.sw.config.ts",
+    "preview:browser": "vite preview --config vite.browser.config.ts",
     "start": "NODE_ENV=production tsx src/server/main.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.server.json",
-    "check": "npm run typecheck && npm test && npm run build"
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.server.json && tsc -p tsconfig.browser.json",
+    "check": "npm run typecheck && npm test && npm run build && npm run build:browser"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.4",
@@ -30,6 +32,7 @@
     "@lezer/common": "^1.5.5",
     "@lezer/highlight": "^1.2.5",
     "@lezer/markdown": "^1.8.1",
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1",
     "dompurify": "^3.4.17",
     "hash-wasm": "^4.13.0",
     "hono": "^4.13.17",
@@ -46,6 +49,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "concurrently": "^10.0.7",
+    "fake-indexeddb": "6.2.8",
     "typescript": "^7.0.2",
     "vite": "^8.3.7",
     "vitest": "^5.1.0"
