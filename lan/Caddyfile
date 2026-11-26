@@ -8,6 +8,8 @@
 }
 
 https://:8443 {
+	# Each request in `docker logs notedid-lan`: shows whether a phone gets through.
+	log
 	tls /certs/server.crt /certs/server.key
 	root * /srv
 	encode gzip
@@ -20,6 +22,7 @@ https://:8443 {
 
 # Plain http, only for what a phone needs before it trusts the https address.
 http://:8080 {
+	log
 	root * /public
 	handle /notedid-ca.crt {
 		header Content-Type application/x-x509-ca-cert

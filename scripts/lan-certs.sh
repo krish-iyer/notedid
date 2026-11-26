@@ -3,12 +3,14 @@
 #   ca.key, ca.crt   a certificate authority of your own, made once, that your phone trusts. It can
 #                    only vouch for private network addresses, localhost, .local names and this
 #                    computer's name, so its key can't be used to pass off any other site.
-#   server.key, .crt this computer's certificate for its current address and name, made each time.
+#   server.key, .crt this computer's certificate for its current addresses and name, made each time.
 #   public/          what a phone may fetch over plain http: the authority's certificate and a page
 #                    saying what to do with it.
-# Usage: sh scripts/lan-certs.sh <address> <host name or ""> <https port>
+# Usage: sh scripts/lan-certs.sh "<address> [<other address>…]" <host name or ""> <https port>
+# The first address is the one on the network; others are, say, a VPN's.
 set -eu
-ip=$1
+addresses=$1
+ip=${addresses%% *}
 name=${2:-}
 port=${3:-4443}
 umask 077
@@ -24,7 +26,7 @@ private() {
 
 if [ ! -s .lan/ca.key ] || [ ! -s .lan/ca.crt ]; then
   allowed="permitted;IP:10.0.0.0/255.0.0.0,permitted;IP:172.16.0.0/255.240.0.0,permitted;IP:192.168.0.0/255.255.0.0,permitted;IP:127.0.0.0/255.0.0.0,permitted;DNS:localhost,permitted;DNS:local"
-  private "$ip" || allowed="$allowed,permitted;IP:$ip/255.255.255.255"
+  for a in $addresses; do private "$a" || allowed="$allowed,permitted;IP:$a/255.255.255.255"; done
   [ -n "$name" ] && allowed="$allowed,permitted;DNS:$name"
   openssl ecparam -name prime256v1 -genkey -noout -out .lan/ca.key
   openssl req -x509 -new -key .lan/ca.key -sha256 -days 3650 -subj "/CN=notedid on your network" \
@@ -35,7 +37,8 @@ if [ ! -s .lan/ca.key ] || [ ! -s .lan/ca.crt ]; then
     -out .lan/ca.crt
 fi
 
-san="IP:$ip,IP:127.0.0.1,DNS:localhost"
+san="IP:127.0.0.1,DNS:localhost"
+for a in $addresses; do san="$san,IP:$a"; done
 [ -n "$name" ] && san="$san,DNS:$name"
 printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=%s\nauthorityKeyIdentifier=keyid\nsubjectKeyIdentifier=hash\n' "$san" > .lan/server.ext
 # Made beside the current one, which it replaces only once it checks out.
@@ -58,6 +61,7 @@ echo "$fingerprint" > .lan/ca.fingerprint
 cp .lan/ca.crt .lan/public/notedid-ca.crt
 links="<a href=\"https://$ip:$port/\">https://$ip:$port/</a>"
 [ -n "$name" ] && links="<a href=\"https://$name:$port/\">https://$name:$port/</a> (or $links)"
+for a in ${addresses#"$ip"}; do links="$links, or through your VPN <a href=\"https://$a:$port/\">https://$a:$port/</a>"; done
 cat > .lan/public/index.html << HTML
 <!doctype html>
 <html lang="en">

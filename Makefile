@@ -62,15 +62,19 @@ LAN_HTTP_PORT ?= 4480
 # This computer's address (the one its default route uses), and its full host name if that leads to the address.
 LAN_IP ?= $(shell ip route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
 LAN_NAME ?= $(shell n=$$(hostname -f 2>/dev/null | tr A-Z a-z); getent hosts "$$n" | grep -q "^$(LAN_IP) " && echo "$$n" | grep '\.')
+# Its other addresses a phone might come by (a VPN's, say), leaving out Docker's own networks.
+LAN_ALSO ?= $(shell ip -4 -o addr show 2>/dev/null | awk '$$2 !~ /^(lo|docker|br-|veth)/ { split($$4, a, "/"); print a[1] }' | grep -v -x '$(LAN_IP)' | tr '\n' ' ')
 lan: $(DEPS) | $(SETUP)
 	@test -n "$(LAN_IP)" || { echo "Couldn't find this computer's network address: make lan LAN_IP=<address>"; exit 1; }
-	$(COMPOSE) run --rm -e BROWSER_OUT=dist/lan dev sh -c 'npm run build:browser > /dev/null && sh scripts/lan-certs.sh "$(LAN_IP)" "$(LAN_NAME)" "$(LAN_PORT)"'
+	$(COMPOSE) run --rm -e BROWSER_OUT=dist/lan dev sh -c 'npm run build:browser > /dev/null && sh scripts/lan-certs.sh "$(strip $(LAN_IP) $(LAN_ALSO))" "$(LAN_NAME)" "$(LAN_PORT)"'
 	-@docker rm -f notedid-lan > /dev/null 2>&1
 	docker run -d --rm --name notedid-lan -p $(LAN_PORT):8443 -p $(LAN_HTTP_PORT):8080 -e LAN_IP=$(LAN_IP) \
 		-v "$(CURDIR)/dist/lan:/srv:ro" -v "$(CURDIR)/.lan/public:/public:ro" -v "$(CURDIR)/.lan:/certs:ro" \
 		-v "$(CURDIR)/lan/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine > /dev/null
 	@echo
 	@echo "notedid is on your network. On your phone, open http://$(LAN_IP):$(LAN_HTTP_PORT)/ and follow the two steps there."
+	@$(if $(strip $(LAN_ALSO)),echo "Through a VPN to this computer: $(foreach a,$(LAN_ALSO),http://$(a):$(LAN_HTTP_PORT)/)",true)
+	@echo "Requests that reach it show in: docker logs notedid-lan"
 	@echo "The certificate's SHA-256 fingerprint, to check on the phone: $$(cat .lan/ca.fingerprint)"
 	@echo "Stop it with make lan-stop; make lan starts it again with the same certificate."
 
