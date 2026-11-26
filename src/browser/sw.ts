@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import wasmUrl from '@sqlite.org/sqlite-wasm/sqlite3.wasm?url';
 import { type Backend, startBackend } from './backend.ts';
 
 /**
@@ -21,7 +22,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE);
-      await cache.addAll(__APP_FILES__);
+      // SQLite's WebAssembly comes from the worker's own build, after the list of the app's files was
+      // made. Without it here, a worker started afresh away from the network couldn't open the notes.
+      await cache.addAll([...new Set([...__APP_FILES__, wasmUrl])]);
       await self.skipWaiting();
     })(),
   );

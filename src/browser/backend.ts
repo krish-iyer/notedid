@@ -23,6 +23,17 @@ const browserFetch: FetchFn = (input, init) => {
   return fetch(input, { ...init, headers });
 };
 
+/**
+ * SQLite's WebAssembly, from the worker's cache of the app's files. Left to itself, SQLite would
+ * fetch it from the network, so a worker started afresh with the network out of reach (a phone
+ * away from where the app is served) couldn't open the notes.
+ */
+async function sqliteWasm(): Promise<ArrayBuffer> {
+  const response = (await caches.match(wasmUrl).catch(() => undefined)) ?? (await fetch(wasmUrl));
+  if (!response.ok) throw new Error(`could not load SQLite (${response.status})`);
+  return response.arrayBuffer();
+}
+
 export interface Backend {
   /** Answers the app's /api requests. */
   app: Hono;
@@ -38,7 +49,10 @@ export interface Backend {
 export async function startBackend(): Promise<Backend> {
   const disk = new IdbDisk(await openNotesDatabase());
   const store = new NoteStore(disk);
-  const sqlite3 = await (sqlite3InitModule as unknown as (options: { locateFile: () => string }) => ReturnType<typeof sqlite3InitModule>)({ locateFile: () => wasmUrl });
+  const sqlite3 = await (sqlite3InitModule as unknown as (options: { locateFile: () => string; wasmBinary: ArrayBuffer }) => ReturnType<typeof sqlite3InitModule>)({
+    locateFile: () => wasmUrl,
+    wasmBinary: await sqliteWasm(),
+  });
   const index = new NoteIndex(wasmDatabase(sqlite3));
   const events = new EventHub();
   const versions = new VersionHistory(store);
