@@ -1,5 +1,6 @@
 import { appendComment, newCommentsNote } from '../shared/comments.ts';
 import { addDays, type ISODate } from '../shared/dates.ts';
+import { EXAMPLES_START } from '../shared/examples.ts';
 import { newNoteId, withNoteId } from '../shared/noteIds.ts';
 import { NoteService } from './notes.ts';
 import { extname } from './posixPath.ts';
@@ -13,7 +14,7 @@ import type { NoteStore } from './storage.ts';
  */
 
 export const EXAMPLE_TAG = 'example';
-export const EXAMPLES_START = 'notes/examples/start-here.md';
+export { EXAMPLES_START };
 
 export interface ExampleFile {
   path: string;

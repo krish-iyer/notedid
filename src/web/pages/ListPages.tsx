@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import type { NoteKind, TaskItem } from '../../shared/api.ts';
 import { fuzzyFilter } from '../../shared/fuzzy.ts';
 import { dueState } from '../../shared/tasks.ts';
-import { captureToToday, createNote, saveView } from '../actions.ts';
+import { addExampleNotes, captureToToday, createNote, saveView } from '../actions.ts';
 import { api } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
 import { TaskRow, taskLabel } from '../components/TaskRow.tsx';
 import { Matched, Snippet } from '../components/Text.tsx';
 import { useDebounced, useLiveData, useToday } from '../hooks.ts';
+import { EXAMPLES_START } from '../../shared/examples.ts';
 import { currentHref, Link, navigate, noteHref } from '../router.ts';
 import { useNotes, useNotesLoaded } from '../stores.ts';
 import { timeAgo } from '../util.ts';
@@ -218,9 +219,16 @@ export function NotesPage() {
     <div className="page narrow">
       <header className="page-head with-action">
         <h1>All notes</h1>
-        <button type="button" className="primary" onClick={() => void createNote()}>
-          <Icon name="plus" size={16} /> New note
-        </button>
+        <div className="head-actions">
+          {loaded && !notes.some((n) => n.path === EXAMPLES_START) && (
+            <button type="button" onClick={() => void addExampleNotes()}>
+              Add example notes
+            </button>
+          )}
+          <button type="button" className="primary" onClick={() => void createNote()}>
+            <Icon name="plus" size={16} /> New note
+          </button>
+        </div>
       </header>
       <div className="toolbar">
         <div className="segmented" role="group" aria-label="Kind">

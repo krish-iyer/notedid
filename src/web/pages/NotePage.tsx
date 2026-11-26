@@ -86,20 +86,42 @@ export function NotePage({ path, anchor }: { path: string; anchor: string | null
 }
 
 /** Open tasks due today or earlier, on today's journal page. */
-/** In an app with no notes yet: the example notes, one for each thing the app does. */
+const NOT_NOW = 'notesapp-examples-not-now';
+
+/** Until there are notes of your own (journal days aside): the example notes, one for each thing the app does. */
 function NewHere() {
   const loaded = useNotesLoaded();
   const notes = useNotes();
-  if (!loaded || notes.length > 0) return null;
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(NOT_NOW) === '1';
+    } catch {
+      return false;
+    }
+  });
+  if (!loaded || dismissed || notes.some((n) => n.kind !== 'journal')) return null;
+  const notNow = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem(NOT_NOW, '1');
+    } catch {
+      // shown again next time
+    }
+  };
   return (
     <section className="new-here" aria-label="New here">
       <p>
         New here? The example notes show what notedid does, one thing each: tasks, tables, cards, a board, a dashboard, a paper with its PDF, and more. They're ordinary notes, and
-        Ctrl+K → <i>Remove example notes</i> takes them away again.
+        Ctrl+K → <i>Remove example notes</i> takes them away again. All notes has this button too.
       </p>
-      <button type="button" className="primary" onClick={() => void addExampleNotes()}>
-        Add example notes
-      </button>
+      <span className="new-here-actions">
+        <button type="button" className="primary" onClick={() => void addExampleNotes()}>
+          Add example notes
+        </button>
+        <button type="button" className="link-button" onClick={notNow}>
+          Not now
+        </button>
+      </span>
     </section>
   );
 }

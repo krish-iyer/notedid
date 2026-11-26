@@ -540,9 +540,15 @@ mark {
 
 .page-head.with-action {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+/* On a narrow screen the title keeps its line, and the buttons go below it. */
+.page-head.with-action h1 {
+  flex: 1 0 auto;
 }
 
 .toolbar,
@@ -4287,4 +4293,11 @@ button.tag-chip:hover:not(:disabled) {
 .new-here p {
   flex: 1 1 22rem;
   margin: 0;
+}
+.head-actions,
+.new-here-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  align-items: center;
 }

@@ -14,7 +14,7 @@ export async function startServiceWorker(): Promise<void> {
     await new Promise<void>((resolve) => navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true }));
   }
   // Later, a new version of the app took over: it applies fully after a reload.
-  navigator.serviceWorker.addEventListener('controllerchange', () => showToast('The app was updated. Reload the page to use the new version.'));
+  navigator.serviceWorker.addEventListener('controllerchange', () => showToast('The app was updated.', 'info', { label: 'Reload', run: () => location.reload() }));
   // Ask the browser to keep the notes even when it runs short of space.
   void navigator.storage?.persist?.().catch(() => false);
 }

@@ -1,6 +1,7 @@
 import { addCard, cardLine, cardsOf, parseBoard, serializeBoard } from '../shared/board.ts';
 import { formatCapture } from '../shared/capture.ts';
 import { journalPath, localISODate, localTime, localTimestamp } from '../shared/dates.ts';
+import { EXAMPLES_START } from '../shared/examples.ts';
 import { tagify } from '../shared/slug.ts';
 import { api, fetchNote, SaveConflict, saveNote } from './api.ts';
 import { askConfirm, askText } from './dialogs.ts';
@@ -166,7 +167,7 @@ export async function addExampleNotes(): Promise<void> {
     const { added, kept } = await api.addExamples(localISODate());
     await refreshNotes();
     showToast(added.length ? `Added ${added.length} example files${kept.length ? ` (${kept.length} were there already)` : ''}.` : 'The examples are all there already.');
-    navigate(noteHref('notes/examples/start-here.md'));
+    navigate(noteHref(EXAMPLES_START));
   } catch (err) {
     showToast(`Could not add the examples: ${messageOf(err)}`, 'error');
   }
