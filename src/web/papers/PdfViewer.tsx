@@ -1,6 +1,8 @@
-import * as pdfjs from 'pdfjs-dist';
-import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// pdf.js's "legacy" build: the same viewer, plus fallbacks for browsers a little behind the newest
+// (Firefox ESR, iPhones not on the latest iOS), which the regular build no longer runs in.
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import { type CSSProperties, forwardRef, type MouseEvent, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { Highlight } from '../../shared/api.ts';
 import { Icon } from '../components/Icon.tsx';

@@ -53,6 +53,13 @@ The browser-only app installs like an app, on phones and computers, and works of
 
 Then open the address on the phone and install it: on an iPhone or iPad, Safari's **Share → Add to Home Screen**; on Android, Chrome's menu → **Install app** (or **Add to home screen**). Open **Sync** there and connect it with the same Dropbox app key: the first sync brings all your notes. The host only serves the app; your notes stay on your devices and in your Dropbox.
 
+**Browsers.** Chrome, Edge, Safari and Firefox (the current one and ESR 140) all run it. In Firefox:
+
+- It runs in a tab (desktop Firefox doesn't install web apps); on Android, Firefox's menu → **Add app to Home screen** installs it.
+- Allow it when Firefox asks to store data in persistent storage.
+- If Firefox deletes cookies and site data when it closes, add an exception for the app's address (Settings → Privacy & Security → Cookies and Site Data → Manage Exceptions). Otherwise the browser-only app starts empty each time, and has to be connected to Dropbox again.
+- Private windows can't keep notes, so it won't start in one.
+
 A few things differ in the browser-only app:
 
 - Adding an arXiv paper gets its details from DataCite, because arXiv's own service doesn't answer browser requests. The PDF still comes from arXiv.
