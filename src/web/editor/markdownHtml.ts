@@ -3,21 +3,17 @@ import { Marked, type Tokens, type TokensList } from 'marked';
 import { parseWikiTarget, safeDecodeURI } from '../../shared/markdown.ts';
 import { fileUrl } from '../api.ts';
 import { resolveNote } from '../stores.ts';
-import { dirname, joinPath } from '../util.ts';
+import { dirname, escapeHtml, joinPath } from '../util.ts';
 
 /**
- * Markdown as HTML for widgets in the editor (cards): [[links]], #tags and images next to the
- * note, made safe. In the vault, links, tags and images show as their text, so nothing is
- * fetched or opened from there.
+ * Markdown as HTML, for cards in the editor and for the reading view: [[links]], #tags and images
+ * next to the note, made safe. In the vault, links, tags and images show as their text, so nothing
+ * is fetched or opened from there.
  */
 
 export interface HtmlOptions {
   notePath: string | null;
   privateMode: boolean;
-}
-
-export function escapeHtml(text: string): string {
-  return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c);
 }
 
 const TAG_START = /(^|[\s([{,;:!?"'*~>])#[\p{L}\p{N}_]/u;
@@ -83,6 +79,8 @@ function markedFor(options: HtmlOptions): Marked {
   const key = `${options.privateMode}\n${options.notePath ?? ''}`;
   let marked = instances.get(key);
   if (!marked) {
+    // One per note (images are found next to it); a long session opens many notes.
+    if (instances.size >= 20) instances.clear();
     marked = create(options);
     instances.set(key, marked);
   }
@@ -90,6 +88,11 @@ function markedFor(options: HtmlOptions): Marked {
 }
 
 const SAFE = { FORBID_TAGS: ['style', 'form', 'button', 'textarea', 'select', 'option'] };
+
+/** A whole note's body (the reading view). */
+export function documentHtml(source: string, options: HtmlOptions): string {
+  return DOMPurify.sanitize(markedFor(options).parse(source) as string, SAFE);
+}
 
 /** One line of markdown (a title, a value). */
 export function inlineHtml(text: string, options: HtmlOptions): string {

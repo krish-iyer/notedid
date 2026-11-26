@@ -1,51 +1,16 @@
-import DOMPurify from 'dompurify';
-import { Marked, type Tokens } from 'marked';
 import { type MouseEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { appendComment, commentsPathFor, type DocComment, newCommentsNote, parseComments } from '../../shared/comments.ts';
-import { parseWikiTarget, safeDecodeURI, splitFrontmatter } from '../../shared/markdown.ts';
-import { fetchNote, fileUrl, SaveConflict, saveNote } from '../api.ts';
+import { splitFrontmatter } from '../../shared/markdown.ts';
+import { fetchNote, SaveConflict, saveNote } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
 import { openLink } from '../editor/links.ts';
+import { renderWithCards } from '../editor/cardView.ts';
 import { useLiveData } from '../hooks.ts';
 import { encodeNotePath, Link, noteHref } from '../router.ts';
 import { useNote } from '../stores.ts';
 import { showToast } from '../toast.ts';
-import { dirname, joinPath, messageOf } from '../util.ts';
+import { messageOf } from '../util.ts';
 
-const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c);
-
-/** Markdown → safe HTML, with [[links]] and images from the notes folder. */
-function renderMarkdown(content: string, notePath: string): string {
-  const markdown = new Marked({ gfm: true, async: false });
-  markdown.use({
-    extensions: [
-      {
-        name: 'wikilink',
-        level: 'inline',
-        start: (src: string) => {
-          const i = src.indexOf('[[');
-          return i < 0 ? undefined : i;
-        },
-        tokenizer: (src: string) => {
-          const match = /^\[\[([^\]\n]+)\]\]/.exec(src);
-          return match ? { type: 'wikilink', raw: match[0], inner: match[1] ?? '' } : undefined;
-        },
-        renderer: (token) => {
-          const { target, heading, label } = parseWikiTarget(String(token.inner));
-          return `<a href="#" class="wikilink" data-target="${escapeHtml(target)}" data-heading="${escapeHtml(heading ?? '')}">${escapeHtml(label ?? target)}</a>`;
-        },
-      },
-    ],
-    renderer: {
-      image({ href, title, text }: Tokens.Image) {
-        const src = /^(https?:|data:)/i.test(href) ? href : fileUrl(joinPath(dirname(notePath), safeDecodeURI(href)));
-        return `<img src="${escapeHtml(src)}" alt="${escapeHtml(text)}"${title ? ` title="${escapeHtml(title)}"` : ''}>`;
-      },
-    },
-  });
-  const { bodyOffset } = splitFrontmatter(content);
-  return DOMPurify.sanitize(markdown.parse(content.slice(bodyOffset)) as string);
-}
 
 /** Wraps the first occurrence of `quote` (ignoring spacing and case) in <mark>s. */
 function markQuote(root: HTMLElement, quote: string, index: number): void {
@@ -97,19 +62,20 @@ export function ReadPage({ path }: { path: string }) {
   const { data: doc, error } = useLiveData(() => fetchNote(path), [path]);
   const { data: commentsDoc, reload } = useLiveData(() => fetchNote(commentsPath), [commentsPath]);
   const comments: DocComment[] = useMemo(() => parseComments(commentsDoc?.content ?? ''), [commentsDoc]);
-  const html = useMemo(() => (doc ? renderMarkdown(doc.content, path) : ''), [doc, path]);
   const article = useRef<HTMLElement>(null);
   const [pending, setPending] = useState<{ quote: string; x: number; y: number } | null>(null);
   const [draft, setDraft] = useState('');
   const [writing, setWriting] = useState(false);
   const [active, setActive] = useState<number | null>(null);
 
+  // The note as HTML (cards drawn as cards), then its commented passages marked.
   useLayoutEffect(() => {
     const el = article.current;
     if (!el) return;
-    el.innerHTML = html;
+    const content = doc?.content ?? '';
+    renderWithCards(el, content.slice(splitFrontmatter(content).bodyOffset), { notePath: path, privateMode: false });
     comments.forEach((c, i) => markQuote(el, c.quote, i));
-  }, [html, comments]);
+  }, [doc, path, comments]);
 
   const onMouseUp = () => {
     const selection = window.getSelection();
@@ -157,10 +123,14 @@ export function ReadPage({ path }: { path: string }) {
     const anchor = target.closest('a');
     if (!anchor) return;
     const wiki = anchor.getAttribute('data-target');
+    const tag = anchor.getAttribute('data-tag');
     const href = anchor.getAttribute('href') ?? '';
     if (wiki !== null) {
       event.preventDefault();
       void openLink({ kind: 'wiki', target: wiki, heading: anchor.getAttribute('data-heading') || null }, path);
+    } else if (tag) {
+      event.preventDefault();
+      void openLink({ kind: 'tag', tag }, path);
     } else if (/^[a-z][a-z0-9+.-]*:/i.test(href)) {
       event.preventDefault();
       window.open(href, '_blank', 'noopener,noreferrer');

@@ -4222,3 +4222,12 @@ button.tag-chip:hover:not(:disabled) {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
+
+/* Cards in the reading view: shown, not edited. */
+.cm-card.read-only {
+  cursor: auto;
+}
+
+.cm-card.read-only:hover {
+  box-shadow: none;
+}

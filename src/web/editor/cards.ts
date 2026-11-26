@@ -6,11 +6,10 @@ import {
   type CardFilter,
   cardFacets,
   cardMatches,
-  cardValueIds,
-  type Facet,
   findCards,
   headingsIn,
   isFiltering,
+  isStatusKey,
   NO_FILTER,
   newCardLines,
   propertyParts,
@@ -34,7 +33,8 @@ import { dirname, messageOf, relativePath } from '../util.ts';
 import { comparingWith } from './compare.ts';
 import { notePathFacet, privateModeFacet } from './context.ts';
 import { openLink } from './links.ts';
-import { blocksHtml, type HtmlOptions, inlineHtml } from './markdownHtml.ts';
+import { ATTACH_KEY, type BarData, BarHost, barData, cardElement, cardTone } from './cardView.ts';
+import type { HtmlOptions } from './markdownHtml.ts';
 import { type MenuEntry, menuElement } from './widgetMenu.ts';
 
 /**
@@ -135,214 +135,6 @@ function saveFilters(state: EditorState, filters: ReadonlyMap<string, CardFilter
 // The bar above a set: counts, the status colours, filters, search, + Card
 // ---------------------------------------------------------------------------
 
-interface BarValue {
-  id: string;
-  value: string;
-  count: number;
-  tone: Tone | null;
-  /** For values of other properties: the status colours of the cards that have it. */
-  mix: { tone: Tone; count: number }[];
-}
-
-interface BarData {
-  key: string;
-  total: number;
-  shown: number;
-  filter: CardFilter;
-  facets: { id: string; key: string; status: boolean; values: BarValue[] }[];
-  /** The status of all the set's cards, value by value. */
-  status: { value: string; tone: Tone; count: number }[];
-}
-
-function barData(set: SetBlock, facets: Facet[], status: Facet | null, filter: CardFilter, shown: number): BarData {
-  const cards = set.cards.map((b) => b.card);
-  const statusOf = (card: Card) => (status ? cardValueIds(card, status.id)[0] : undefined);
-  const toneById = new Map(status?.values.map((v) => [v.id, toneOf(v.value)]) ?? []);
-  return {
-    key: set.key,
-    total: cards.length,
-    shown,
-    filter,
-    facets: facets.map((facet) => ({
-      id: facet.id,
-      key: facet.key,
-      status: facet === status,
-      values: facet.values.map((v) => {
-        const mix = new Map<Tone, number>();
-        if (status && facet !== status) {
-          for (const card of cards) {
-            if (!cardValueIds(card, facet.id).includes(v.id)) continue;
-            const tone = toneById.get(statusOf(card) ?? '');
-            if (tone) mix.set(tone, (mix.get(tone) ?? 0) + 1);
-          }
-        }
-        return { id: v.id, value: v.value, count: v.count, tone: facet === status ? toneOf(v.value) : null, mix: [...mix].map(([tone, count]) => ({ tone, count })) };
-      }),
-    })),
-    status: status?.values.map((v) => ({ value: v.value, tone: toneOf(v.value), count: v.count })) ?? [],
-  };
-}
-
-const barHosts = new WeakMap<HTMLElement, BarHost>();
-
-class BarHost {
-  readonly dom: HTMLElement;
-  readonly view: EditorView;
-  readonly #count: HTMLElement;
-  readonly #clear: HTMLButtonElement;
-  readonly #mix: HTMLElement;
-  readonly #search: HTMLInputElement;
-  readonly #facets: HTMLElement;
-  #data: BarData | null = null;
-
-  constructor(view: EditorView) {
-    this.view = view;
-    // The widget's root has no margins (the editor can't measure them): spacing is its padding.
-    this.dom = document.createElement('div');
-    this.dom.className = 'cm-card-bar-outer';
-    const bar = document.createElement('div');
-    bar.className = 'cm-card-bar';
-    this.dom.append(bar);
-    const top = document.createElement('div');
-    top.className = 'cm-card-bar-top';
-    this.#count = document.createElement('span');
-    this.#count.className = 'cm-card-count';
-    this.#clear = this.#button('Show all', 'cm-card-clear', 'Clear the filters and the search');
-    this.#mix = document.createElement('span');
-    this.#mix.className = 'cm-card-mix';
-    this.#search = document.createElement('input');
-    this.#search.type = 'search';
-    this.#search.className = 'cm-card-search';
-    this.#search.placeholder = 'Search cards';
-    this.#search.setAttribute('aria-label', 'Search these cards');
-    this.#search.spellcheck = false;
-    const add = this.#button('+ Card', 'cm-card-add', 'Add a card at the end of this set');
-    top.append(this.#count, this.#clear, this.#mix, this.#search, add);
-    this.#facets = document.createElement('div');
-    this.#facets.className = 'cm-card-facets';
-    bar.append(top, this.#facets);
-
-    // Using the bar leaves the cursor where it was (the search box takes the focus, though).
-    this.dom.addEventListener('mousedown', (e) => {
-      if (e.target !== this.#search) e.preventDefault();
-    });
-    this.dom.addEventListener('click', (e) => this.#onClick(e));
-    this.#search.addEventListener('input', () => this.#setFilter({ ...this.#filter, search: this.#search.value }));
-    this.#search.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      this.#search.value = '';
-      this.#setFilter({ ...this.#filter, search: '' });
-      this.view.focus();
-    });
-    barHosts.set(this.dom, this);
-  }
-
-  get #filter(): CardFilter {
-    return this.#data?.filter ?? NO_FILTER;
-  }
-
-  #button(label: string, className: string, title: string): HTMLButtonElement {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = className;
-    button.textContent = label;
-    button.title = title;
-    return button;
-  }
-
-  #setFilter(filter: CardFilter): void {
-    if (!this.#data) return;
-    this.view.dispatch({ effects: setFilter.of({ key: this.#data.key, filter }) });
-  }
-
-  #onClick(event: MouseEvent): void {
-    const target = event.target as HTMLElement;
-    const data = this.#data;
-    if (!data) return;
-    if (target.closest('.cm-card-add')) return addCard(this.view, data.key);
-    if (target.closest('.cm-card-clear')) {
-      this.#search.value = '';
-      return this.#setFilter(NO_FILTER);
-    }
-    const chip = target.closest<HTMLElement>('.cm-card-filter');
-    if (!chip) return;
-    const facet = chip.dataset.facet ?? '';
-    const value = chip.dataset.value ?? '';
-    const current = data.filter.values[facet] ?? [];
-    const next = current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
-    this.#setFilter({ ...data.filter, values: { ...data.filter.values, [facet]: next } });
-  }
-
-  update(data: BarData): void {
-    this.#data = data;
-    const filtering = isFiltering(data.filter);
-    const noun = data.total === 1 ? 'card' : 'cards';
-    this.#count.textContent = filtering ? (data.shown ? `${data.shown} of ${data.total} ${noun}` : `No cards match (of ${data.total})`) : `${data.total} ${noun}`;
-    this.#clear.hidden = !filtering;
-
-    this.#mix.hidden = data.status.length === 0 || data.total < 2;
-    this.#mix.replaceChildren(
-      ...data.status.map((s) => {
-        const part = document.createElement('span');
-        part.className = `tone-${s.tone}`;
-        part.style.flexGrow = String(s.count);
-        part.title = `${s.value}: ${s.count}`;
-        return part;
-      }),
-    );
-    this.#mix.title = data.status.map((s) => `${s.value}: ${s.count}`).join(' · ');
-
-    // Search only pays off with a few cards; a search in progress stays visible.
-    this.#search.hidden = data.total < 4 && !data.filter.search;
-    if (document.activeElement !== this.#search && this.#search.value !== data.filter.search) this.#search.value = data.filter.search;
-
-    this.#facets.hidden = data.total < 2;
-    this.#facets.replaceChildren(
-      ...data.facets.map((facet) => {
-        const row = document.createElement('div');
-        row.className = 'cm-card-facet';
-        const label = document.createElement('span');
-        label.className = 'cm-card-facet-key';
-        label.textContent = facet.key;
-        row.append(label);
-        const wanted = data.filter.values[facet.id] ?? [];
-        for (const v of facet.values) {
-          const chip = document.createElement('button');
-          chip.type = 'button';
-          chip.className = `cm-card-filter${v.tone ? ` tone-${v.tone}` : ''}`;
-          chip.dataset.facet = facet.id;
-          chip.dataset.value = v.id;
-          chip.setAttribute('aria-pressed', String(wanted.includes(v.id)));
-          chip.title = `Show only cards with ${facet.key} “${v.value}” (click again to stop)`;
-          if (v.tone) {
-            const dot = document.createElement('span');
-            dot.className = 'cm-card-dot';
-            chip.append(dot);
-          }
-          const count = document.createElement('span');
-          count.className = 'cm-card-n';
-          count.textContent = String(v.count);
-          chip.append(v.value, count);
-          if (v.mix.length) {
-            const mix = document.createElement('span');
-            mix.className = 'cm-card-chip-mix';
-            for (const m of v.mix) {
-              const part = document.createElement('span');
-              part.className = `tone-${m.tone}`;
-              part.style.flexGrow = String(m.count);
-              mix.append(part);
-            }
-            chip.append(mix);
-          }
-          row.append(chip);
-        }
-        return row;
-      }),
-    );
-  }
-}
-
 class BarWidget extends WidgetType {
   readonly data: BarData;
   readonly signature: string;
@@ -358,13 +150,17 @@ class BarWidget extends WidgetType {
   }
 
   toDOM(view: EditorView): HTMLElement {
-    const host = new BarHost(view);
+    const host = new BarHost({
+      filter: (key, filter) => view.dispatch({ effects: setFilter.of({ key, filter }) }),
+      add: (key) => addCard(view, key),
+      leave: () => view.focus(),
+    });
     host.update(this.data);
     return host.dom;
   }
 
   override updateDOM(dom: HTMLElement): boolean {
-    const host = barHosts.get(dom);
+    const host = BarHost.of(dom);
     if (!host) return false;
     host.update(this.data);
     return true;
@@ -441,12 +237,6 @@ function showPopup(container: HTMLElement, anchor: HTMLElement, menu: HTMLElemen
   };
 }
 
-const STATUS_KEYS = new Set(['status', 'state', 'stage', 'progress']);
-
-function wordCount(text: string): number {
-  return text ? text.split(' ').length : 0;
-}
-
 class CardWidget extends WidgetType {
   readonly text: string;
   readonly card: Card;
@@ -466,107 +256,7 @@ class CardWidget extends WidgetType {
   }
 
   toDOM(view: EditorView): HTMLElement {
-    const { card, options } = this;
-    const dom = document.createElement('div');
-    dom.className = `cm-card${this.tone ? ` tone-${this.tone}` : ''}`;
-
-    const title = document.createElement('div');
-    title.className = 'cm-card-title';
-    title.dataset.line = '0';
-    title.dataset.endLine = '0';
-    if (card.title) title.innerHTML = inlineHtml(card.title, options);
-    else title.innerHTML = '<span class="cm-card-untitled">Untitled</span>';
-    dom.append(title);
-
-    const props = document.createElement('div');
-    props.className = 'cm-card-props';
-    card.properties.forEach((property, index) => {
-      const group = document.createElement('span');
-      group.className = 'cm-card-prop';
-      const key = document.createElement('span');
-      key.className = 'cm-card-key';
-      key.textContent = property.key;
-      group.append(key);
-      const values = propertyValues(property.value);
-      if (values.length === 0 && property.key.toLowerCase() === ATTACH_KEY) return;
-      if (values.length === 0) group.append(pill(property.key, index, 0, null));
-      values.forEach((value, part) => {
-        const kind = valueKind(value);
-        if (kind === 'word') {
-          group.append(pill(property.key, index, part, value));
-        } else if (kind === 'link') {
-          group.append(linkChip(value, index, part, options));
-        } else {
-          const span = document.createElement('span');
-          span.className = 'cm-card-text';
-          span.innerHTML = inlineHtml(value, options);
-          group.append(span);
-        }
-      });
-      props.append(group);
-    });
-    if (!options.privateMode) {
-      const attach = document.createElement('button');
-      attach.type = 'button';
-      attach.className = 'cm-card-attach-button';
-      attach.textContent = '+ Attach';
-      attach.title = 'Attach a note, a paper or a PDF to this card (or drop files on it)';
-      attach.setAttribute('aria-haspopup', 'dialog');
-      props.append(attach);
-    }
-    dom.append(props);
-
-    // The text: everything after the property lines, block by block.
-    const lines = this.text.split('\n');
-    const offset = card.properties.length + 1;
-    const body = document.createElement('div');
-    body.className = 'cm-card-body';
-    for (const block of blocksHtml(lines.slice(offset).join('\n'), options)) {
-      const el = document.createElement('div');
-      el.className = 'cm-card-block';
-      el.dataset.line = String(block.from + offset);
-      el.dataset.endLine = String(block.to + offset);
-      if (block.type === 'blockquote') {
-        el.classList.add('cm-card-quote', 'folded');
-        const full = document.createElement('div');
-        full.className = 'cm-card-quote-full';
-        full.innerHTML = block.html;
-        const fold = document.createElement('button');
-        fold.type = 'button';
-        fold.className = 'cm-card-quote-fold';
-        fold.textContent = '▴';
-        fold.title = 'Fold this quote';
-        fold.setAttribute('aria-label', 'Fold this quote');
-        full.prepend(fold);
-        const text = (full.querySelector('blockquote')?.textContent ?? '').replace(/\s+/g, ' ').trim();
-        const summary = document.createElement('div');
-        summary.className = 'cm-quote-folded cm-card-quote-summary';
-        summary.title = 'Folded quote: click to open it';
-        const mark = document.createElement('span');
-        mark.className = 'cm-quote-folded-mark';
-        mark.textContent = '❝';
-        const words = document.createElement('span');
-        words.className = 'cm-quote-folded-text';
-        words.textContent = text || 'Quote';
-        const size = document.createElement('span');
-        size.className = 'cm-quote-folded-size';
-        const n = wordCount(text);
-        size.textContent = `${n} word${n === 1 ? '' : 's'}`;
-        summary.append(mark, words, size);
-        el.append(summary, full);
-      } else {
-        el.innerHTML = block.html;
-        for (const box of el.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')) {
-          if (box.closest('blockquote')) continue;
-          box.disabled = false;
-          box.classList.add('cm-card-task');
-          box.setAttribute('aria-label', box.checked ? 'Done. Mark as not done' : 'Not done. Mark as done');
-        }
-      }
-      body.append(el);
-    }
-    if (body.childElementCount) dom.append(body);
-
+    const dom = cardElement(this.text, this.card, this.tone, this.options, true);
     // The widget's root has no margins (the editor can't measure them): spacing is its padding.
     const root = document.createElement('div');
     root.className = 'cm-card-outer';
@@ -606,35 +296,6 @@ class CardWidget extends WidgetType {
   override get estimatedHeight(): number {
     return 64 + 24 * Math.min(30, this.text.split('\n').length - this.card.properties.length - 1);
   }
-}
-
-function pill(key: string, property: number, part: number, value: string | null): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = `cm-card-pill ${value === null ? 'empty' : `tone-${toneOf(value)}`}`;
-  button.dataset.property = String(property);
-  button.dataset.part = String(part);
-  button.setAttribute('aria-haspopup', 'menu');
-  button.title = value === null ? `Choose a ${key}` : `${key}: ${value}. Click to change it`;
-  button.textContent = value ?? 'set…';
-  return button;
-}
-
-/** A link value (a note, a paper, a file, a web page) as a chip, with a button to remove it. */
-function linkChip(value: string, property: number, part: number, options: HtmlOptions): HTMLElement {
-  const chip = document.createElement('span');
-  chip.className = 'cm-card-link';
-  chip.innerHTML = inlineHtml(value, options);
-  const remove = document.createElement('button');
-  remove.type = 'button';
-  remove.className = 'cm-card-unlink';
-  remove.dataset.property = String(property);
-  remove.dataset.part = String(part);
-  remove.textContent = '×';
-  remove.title = 'Remove this link from the card';
-  remove.setAttribute('aria-label', 'Remove this link from the card');
-  chip.append(remove);
-  return chip;
 }
 
 /** The card a widget shows, as the document is now. */
@@ -695,9 +356,8 @@ function onCardClick(view: EditorView, dom: HTMLElement, event: MouseEvent): voi
     toggleTask(view, dom, target);
     return;
   }
-  const quote = target.closest<HTMLElement>('.cm-card-quote');
-  if (quote && (target.closest('.cm-card-quote-summary') || target.closest('.cm-card-quote-fold'))) {
-    quote.classList.toggle('folded');
+  // A quote folding or opening (the card does that itself): the card's height changed.
+  if (target.closest('.cm-card-quote-summary, .cm-card-quote-fold')) {
     view.requestMeasure();
     return;
   }
@@ -741,7 +401,7 @@ function valueMenu(view: EditorView, dom: HTMLElement, anchor: HTMLElement, from
     choices.push(value);
   };
   for (const block of found.set.cards) for (const p of block.card.properties) if (p.key.toLowerCase() === id) propertyValues(p.value).forEach(offer);
-  if (STATUS_KEYS.has(id)) ['todo', 'in progress', 'done'].forEach(offer);
+  if (isStatusKey(id)) ['todo', 'in progress', 'done'].forEach(offer);
 
   const change = (value: string | null) => () => {
     const now = locate(view, dom);
@@ -798,8 +458,6 @@ function toggleTask(view: EditorView, dom: HTMLElement, box: HTMLInputElement): 
 // ---------------------------------------------------------------------------
 // Attachments: notes, papers and files linked in a card's `attached::` line
 // ---------------------------------------------------------------------------
-
-const ATTACH_KEY = 'attached';
 
 /** A [[link]] to a note: by its title when that finds it, otherwise by its path, labelled with the title. */
 function wikiLinkTo(note: NoteSummary): string {
@@ -1062,7 +720,8 @@ function build(state: EditorState, sets: SetBlock[], focused: boolean, filters: 
     const facets = cardFacets(set.cards.map((b) => b.card));
     const status = statusFacet(facets);
     const matches = set.cards.map((b) => cardMatches(b.card, b.text, filter));
-    ranges.push(Decoration.widget({ widget: new BarWidget(barData(set, facets, status, filter, matches.filter(Boolean).length)), side: -1, block: true }).range(set.from));
+    const data = barData(set.key, set.cards.map((b) => b.card), facets, status, filter, matches.filter(Boolean).length);
+    ranges.push(Decoration.widget({ widget: new BarWidget(data), side: -1, block: true }).range(set.from));
     set.cards.forEach((block, i) => {
       const { from, to, last } = block;
       const editing = focused && state.selection.ranges.some((r) => r.from <= to && r.to >= from);
@@ -1083,9 +742,7 @@ function build(state: EditorState, sets: SetBlock[], focused: boolean, filters: 
         ranges.push(Decoration.replace({ block: true }).range(from, last));
       } else {
         shown.push({ from, to, last, as: 'card' });
-        const statusValue = status ? propertyValues(block.card.properties.find((p) => p.key.toLowerCase() === status.id)?.value ?? '')[0] : undefined;
-        const tone = statusValue ? toneOf(statusValue) : null;
-        ranges.push(Decoration.replace({ widget: new CardWidget(block.text, block.card, tone, options), block: true }).range(from, to));
+        ranges.push(Decoration.replace({ widget: new CardWidget(block.text, block.card, cardTone(block.card, status), options), block: true }).range(from, to));
       }
     });
   }
