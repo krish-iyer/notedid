@@ -12,13 +12,15 @@ import { defineConfig, type Plugin } from 'vite';
  */
 const BASE = process.env.BASE_PATH || '/';
 if (!/^\/([\w.-]+\/)*$/.test(BASE)) throw new Error(`BASE_PATH must start and end with a slash, like /notedid/ (got ${BASE})`);
+/** Where the build goes (`make lan` builds into a folder of its own, which it serves). */
+const OUT = process.env.BROWSER_OUT || 'dist/browser';
 
 /** A copy of index.html as 404.html: hosts like GitHub Pages answer an address they don't know (a note's) with it, and the app shows the note. */
 const notFoundPage: Plugin = {
   name: 'not-found-page',
   apply: 'build',
   closeBundle() {
-    copyFileSync('dist/browser/index.html', 'dist/browser/404.html');
+    copyFileSync(`${OUT}/index.html`, `${OUT}/404.html`);
   },
 };
 
@@ -27,7 +29,7 @@ export default defineConfig({
   plugins: [react(), notFoundPage],
   define: { __BROWSER_APP__: 'true' },
   build: {
-    outDir: 'dist/browser',
+    outDir: OUT,
     emptyOutDir: true,
   },
   preview: {

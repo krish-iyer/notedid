@@ -8,7 +8,7 @@ import { defineConfig } from 'vite';
  * (vite.browser.config.ts) into the same folder. It gets the list of the app's files to keep for
  * offline use, and a build name for its cache.
  */
-const OUT = 'dist/browser';
+const OUT = process.env.BROWSER_OUT || 'dist/browser';
 /** Where the app is served from (see vite.browser.config.ts). */
 const BASE = process.env.BASE_PATH || '/';
 

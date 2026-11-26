@@ -1,0 +1,32 @@
+# Serves the browser-only app on your network over HTTPS, for your phone: `make lan` (README.md).
+# Only the app's own files are served; the notes stay on each device.
+{
+	admin off
+	auto_https disable_redirects
+	# A phone that connects by address sends no server name: answer with the certificate for it.
+	default_sni {$LAN_IP}
+}
+
+https://:8443 {
+	tls /certs/server.crt /certs/server.key
+	root * /srv
+	encode gzip
+	# Ask for the worker anew each time, so a new version of the app reaches the phone.
+	header /sw.js Cache-Control "no-cache"
+	header /manifest.webmanifest Content-Type application/manifest+json
+	try_files {path} /index.html
+	file_server
+}
+
+# Plain http, only for what a phone needs before it trusts the https address.
+http://:8080 {
+	root * /public
+	handle /notedid-ca.crt {
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+	handle {
+		rewrite * /index.html
+		file_server
+	}
+}

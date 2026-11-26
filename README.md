@@ -46,8 +46,13 @@ Open **Sync** in the sidebar to sync your notes through your Dropbox, in the bro
 
 ### On your phone
 
-The browser-only app installs like an app, on phones and computers, and works offline. A phone needs it served over HTTPS from somewhere, and as it is plain static files, free static hosting does:
+The browser-only app installs like an app, on phones and computers, and works offline. A phone needs it served over HTTPS, from this computer or from a host:
 
+- **From this computer, on your network:** `make lan` serves it over HTTPS at this computer's address (port 4443; `make lan-stop` stops it). It needs no hosting, but each phone has to trust this computer's certificate once:
+  1. On the phone, open the address `make lan` prints (`http://<this computer>:4480/`). The page there has the certificate to download and says how to install and trust it on an iPhone or Android, and its fingerprint to check.
+  2. Open `https://<this computer>:4443/` and install the app.
+
+  The certificate comes from a certificate authority of your own, made the first time in `.lan/` (gitignored; keep it private). It can only vouch for private network addresses and this computer's names, so its key can't be used to pass off other sites. The phone needs this computer only to install the app and to get new versions; the installed app opens and syncs without it. If the phone can't open the page, the network keeps its devices apart (some Wi-Fi does): use a host instead.
 - **GitHub Pages:** push this repository to GitHub and, in its **Settings → Pages**, pick **GitHub Actions** as the source. The workflow in `.github/workflows/pages.yml` then tests and publishes the app at `https://<you>.github.io/<repository>/` on every push to `main`. On a free GitHub plan the repository has to be public; it holds the app's code only, never your notes.
 - **Anywhere else** (Netlify, Cloudflare Pages, a server of yours): `make browser-dist` builds it into `dist/browser/` to upload. Served from a folder (`https://example.com/notes/`)? Build with `make browser-dist BASE_PATH=/notes/`.
 
