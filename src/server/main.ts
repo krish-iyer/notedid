@@ -6,6 +6,8 @@ import { createApp } from './app.ts';
 import { loadConfig } from './config.ts';
 import { EventHub } from './events.ts';
 import { GitHistory } from './git.ts';
+import { NodeDisk } from './nodeDisk.ts';
+import { memoryDatabase } from './nodeSqlite.ts';
 import { NoteIndex } from './noteIndex.ts';
 import { NoteService } from './notes.ts';
 import { PaperService } from './papers.ts';
@@ -15,12 +17,13 @@ import { VaultStore } from './vault.ts';
 import { watchFolder } from './watcher.ts';
 
 const config = loadConfig();
-const store = new NoteStore(config.notesDir);
-await store.init();
+const disk = new NodeDisk(config.notesDir);
+await disk.init();
+const store = new NoteStore(disk);
 
-const index = new NoteIndex();
+const index = new NoteIndex(memoryDatabase());
 const events = new EventHub();
-const history = new GitHistory(store.base, { delayMs: config.historyDelayMs });
+const history = new GitHistory(disk.base, { delayMs: config.historyDelayMs });
 const historyOn = await history.init().catch((err: unknown) => {
   console.warn('Note history is off:', err instanceof Error ? err.message : err);
   return false;
@@ -28,11 +31,10 @@ const historyOn = await history.init().catch((err: unknown) => {
 const notes = new NoteService({ store, index, events, history: historyOn ? history : null });
 const started = Date.now();
 const count = await notes.loadAll();
-const vault = new VaultStore(store.base);
-await vault.init();
+const vault = new VaultStore(disk);
 const papers = new PaperService({ store, index, notes, fetch });
-const settings = new SettingsStore(store.base);
-const stopWatching = watchFolder(store.base, (rel) => notes.onFileEvent(rel));
+const settings = new SettingsStore(disk);
+const stopWatching = watchFolder(disk.base, (rel) => notes.onFileEvent(rel));
 
 const app = createApp(
   { store, index, events, notes, settings, papers, vault, history: historyOn ? history : null, fetch },

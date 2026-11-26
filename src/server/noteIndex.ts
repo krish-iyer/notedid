@@ -1,9 +1,24 @@
-import path from 'node:path';
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import type { BacklinksResponse, NoteKind, NoteSummary, SearchHit, SearchResponse, TagCount, TaskItem, UnlinkedMention } from '../shared/api.ts';
 import { linkKey } from '../shared/markdown.ts';
 import { dueMatches, isTaskQuery, type ParsedQuery, type SearchTerm } from '../shared/query.ts';
 import { analyzeNote, stemOf } from './analyze.ts';
+import { dirname, join } from './posixPath.ts';
+
+/** A value SQLite takes as a parameter. */
+export type SqlValue = string | number | bigint | null | Uint8Array;
+
+/**
+ * The SQLite calls the index makes (node:sqlite's `DatabaseSync` has them, and so does the browser
+ * adapter around SQLite compiled to WebAssembly), so the same index runs on a server and in a browser.
+ */
+export interface SqlDatabase {
+  exec(sql: string): void;
+  prepare(sql: string): {
+    run(...params: SqlValue[]): { changes: number | bigint; lastInsertRowid: number | bigint };
+    get(...params: SqlValue[]): unknown;
+    all(...params: SqlValue[]): unknown[];
+  };
+}
 
 const SCHEMA = `
 CREATE TABLE notes (
@@ -74,13 +89,15 @@ export function findMention(line: string, term: string): { index: number; text: 
 }
 
 /**
- * The searchable index of all notes: titles, full text, links, tags and tasks. It lives in
- * memory and is rebuilt from the files at startup; the files stay the source of truth.
+ * The searchable index of all notes: titles, full text, links, tags and tasks. It lives in an
+ * in-memory database and is rebuilt from the files at startup; the files stay the source of truth.
  */
 export class NoteIndex {
-  readonly #db = new DatabaseSync(':memory:');
+  readonly #db: SqlDatabase;
 
-  constructor() {
+  /** `db`: an empty in-memory SQLite database, with FTS5. */
+  constructor(db: SqlDatabase) {
+    this.#db = db;
     this.#db.exec(SCHEMA);
   }
 
@@ -109,7 +126,7 @@ export class NoteIndex {
     for (const field of META_FIELDS) if (a.frontmatter[field] !== undefined) meta[field] = a.frontmatter[field];
     const lines = content.split(/\r?\n/);
     const contextOf = (line: number) => (lines[line - 1] ?? '').trim().slice(0, 300);
-    const dir = path.posix.dirname(notePath);
+    const dir = dirname(notePath);
 
     this.#db.exec('BEGIN');
     try {
@@ -135,7 +152,7 @@ export class NoteIndex {
       for (const link of a.links) {
         let key: string;
         if (link.kind === 'date') key = `journal/${link.target}`;
-        else if (link.kind === 'md') key = linkKey(path.posix.normalize(path.posix.join(dir, link.target)));
+        else if (link.kind === 'md') key = linkKey(join(dir, link.target));
         else if (link.kind === 'url') key = `url:${link.target}`;
         else key = /\.pdf$/i.test(link.target) ? link.target.toLowerCase() : linkKey(link.target);
         insertLink.run(notePath, link.kind, link.target, key, link.line, contextOf(link.line));
@@ -166,8 +183,8 @@ export class NoteIndex {
   #delete(notePath: string): boolean {
     const row = this.#db.prepare('SELECT id FROM notes WHERE path = ?').get(notePath) as Row | undefined;
     if (!row) return false;
-    this.#db.prepare('DELETE FROM notes_fts WHERE rowid = ?').run(row.id as SQLInputValue);
-    this.#db.prepare('DELETE FROM notes WHERE id = ?').run(row.id as SQLInputValue);
+    this.#db.prepare('DELETE FROM notes_fts WHERE rowid = ?').run(row.id as SqlValue);
+    this.#db.prepare('DELETE FROM notes WHERE id = ?').run(row.id as SqlValue);
     for (const table of ['note_keys', 'tags', 'tasks']) this.#db.prepare(`DELETE FROM ${table} WHERE path = ?`).run(notePath);
     this.#db.prepare('DELETE FROM links WHERE src = ?').run(notePath);
     return true;
@@ -176,7 +193,7 @@ export class NoteIndex {
   /** The note a link target refers to: by path, then title, then file name, then alias. */
   resolve(target: string, fromPath?: string): string | null {
     let key = /\.pdf$/i.test(target) ? target.toLowerCase() : linkKey(target);
-    if (fromPath && /^\.{1,2}\//.test(target)) key = linkKey(path.posix.normalize(path.posix.join(path.posix.dirname(fromPath), target)));
+    if (fromPath && /^\.{1,2}\//.test(target)) key = linkKey(join(dirname(fromPath), target));
     const row = this.#db.prepare('SELECT path FROM note_keys WHERE key = ? ORDER BY priority, path LIMIT 1').get(key) as Row | undefined;
     return row ? str(row.path) : null;
   }
@@ -287,7 +304,7 @@ export class NoteIndex {
   search(query: ParsedQuery, options: { today: string; pinned: string[]; limit?: number }): SearchResponse {
     const limit = options.limit ?? 100;
     const where: string[] = [];
-    const params: SQLInputValue[] = [];
+    const params: SqlValue[] = [];
     const taskMode = isTaskQuery(query);
 
     // Note-level filters. In task mode tags are matched per task instead (below).
@@ -371,7 +388,7 @@ export class NoteIndex {
     return { mode: 'notes', notes, tasks: [], errors: query.errors };
   }
 
-  #searchTasks(query: ParsedQuery, where: string[], params: SQLInputValue[], today: string, limit: number): TaskItem[] {
+  #searchTasks(query: ParsedQuery, where: string[], params: SqlValue[], today: string, limit: number): TaskItem[] {
     const states = query.is.filter((v) => v === 'open' || v === 'done');
     if (states.length === 1) where.push(states[0] === 'open' ? 't.done = 0' : 't.done = 1');
     const rows = this.#db

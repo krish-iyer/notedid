@@ -1,7 +1,6 @@
-import { createHash, randomBytes } from 'node:crypto';
-import * as fs from 'node:fs/promises';
-import path from 'node:path';
 import type { NoteDoc } from '../shared/api.ts';
+import { sha256Hex } from '../shared/sha256.ts';
+import type { Disk } from './disk.ts';
 
 /** Top-level folders the general file APIs never touch; they get their own APIs or none at all. */
 const RESERVED_FOLDERS = new Set(['vault']);
@@ -35,7 +34,7 @@ export class ConflictError extends Error {
 }
 
 export function hashContent(content: string | Uint8Array): string {
-  return createHash('sha256').update(content).digest('hex');
+  return sha256Hex(content);
 }
 
 /**
@@ -71,25 +70,17 @@ export function normalizeNotePath(input: unknown): string {
   return normalizePath(input, NOTE_EXTENSIONS);
 }
 
-/** Reads and writes files inside the notes folder, refusing anything that would leave it. */
+/**
+ * Notes and other files inside the notes folder: text read and written as exact UTF-8, saves that
+ * check the version they started from, and one write at a time per file. Where the files are is
+ * the `Disk`'s business (a folder on a computer, or the browser's storage).
+ */
 export class NoteStore {
-  readonly root: string;
-  #realRoot: string | null = null;
+  readonly disk: Disk;
   readonly #locks = new Map<string, Promise<void>>();
 
-  constructor(root: string) {
-    this.root = path.resolve(root);
-  }
-
-  /** Creates the notes folder if needed. Call once before using the store. */
-  async init(): Promise<void> {
-    await fs.mkdir(this.root, { recursive: true, mode: 0o700 });
-    this.#realRoot = await fs.realpath(this.root);
-  }
-
-  get base(): string {
-    if (this.#realRoot === null) throw new Error('NoteStore.init() has not been called');
-    return this.#realRoot;
+  constructor(disk: Disk) {
+    this.disk = disk;
   }
 
   /** A note's content and hash (empty with a null hash when it doesn't exist). */
@@ -108,162 +99,73 @@ export class NoteStore {
 
   /** Like read(), for any already-validated relative path to a text file. */
   async readText(rel: string): Promise<NoteDoc> {
-    const file = await this.#existingFile(rel);
-    const content = file === null ? null : await readText(file);
-    if (content === null) return { path: rel, content: '', hash: null };
+    const bytes = await this.disk.read(rel);
+    if (bytes === null) return { path: rel, content: '', hash: null };
+    const content = decodeText(bytes);
     return { path: rel, content, hash: hashContent(content) };
   }
 
   /** Like write(), for any already-validated relative path to a text file. */
   async writeText(rel: string, content: string, baseHash: string | null): Promise<{ path: string; hash: string }> {
     return this.#oneAtATime(rel, async () => {
-      const file = await this.#writableFile(rel);
-      const existing = await readText(file);
+      const bytes = await this.disk.read(rel);
+      const existing = bytes === null ? null : decodeText(bytes);
       const existingHash = existing === null ? null : hashContent(existing);
       const hash = hashContent(content);
       if (existingHash === hash) return { path: rel, hash };
       if (existingHash !== baseHash) {
         throw new ConflictError({ path: rel, content: existing ?? '', hash: existingHash });
       }
-      await atomicWrite(file, content);
+      await this.disk.write(rel, encoder.encode(content));
       return { path: rel, hash };
     });
   }
 
   /** Raw bytes of a validated path, or null if it doesn't exist. */
-  async readBytes(rel: string): Promise<Buffer | null> {
-    const file = await this.#existingFile(rel);
-    if (file === null) return null;
-    try {
-      return await fs.readFile(file);
-    } catch (err) {
-      if (hasCode(err, 'ENOENT')) return null;
-      if (hasCode(err, 'EISDIR')) throw new PathError('That path is a folder');
-      throw err;
-    }
+  async readBytes(rel: string): Promise<Uint8Array | null> {
+    return this.disk.read(rel);
   }
 
   /** Creates a new file with these bytes; fails with PathError if it already exists. */
   async createBytes(rel: string, bytes: Uint8Array): Promise<void> {
     await this.#oneAtATime(rel, async () => {
-      const file = await this.#writableFile(rel);
-      if ((await realpathOrNull(file)) !== null) throw new PathError(`${rel} already exists`);
-      await atomicWrite(file, bytes);
+      if ((await this.disk.stat(rel)) !== null) throw new PathError(`${rel} already exists`);
+      await this.disk.write(rel, bytes);
     });
   }
 
   /** Moves a file to a new path inside the notes folder; fails if the target exists. */
   async move(fromRel: string, toRel: string): Promise<void> {
-    const from = await this.#existingFile(fromRel);
-    if (from === null) throw new PathError(`${fromRel} does not exist`);
-    const to = await this.#writableFile(toRel);
-    if ((await realpathOrNull(to)) !== null) throw new PathError(`${toRel} already exists`);
-    await fs.rename(from, to);
+    await this.disk.move(fromRel, toRel);
   }
 
   async exists(rel: string): Promise<boolean> {
-    return (await this.#existingFile(rel)) !== null;
+    return (await this.disk.stat(rel)) !== null;
   }
 
   async stat(rel: string): Promise<{ size: number; mtime: number } | null> {
-    const file = await this.#existingFile(rel);
-    if (file === null) return null;
-    const stats = await fs.stat(file);
-    return { size: stats.size, mtime: stats.mtimeMs };
+    return this.disk.stat(rel);
   }
 
-  /** Absolute path of an existing, validated file (for streaming it). */
-  async absolute(rel: string): Promise<string | null> {
-    return this.#existingFile(rel);
-  }
-
-  /**
-   * Every file below the notes folder with one of `extensions`, as relative paths. Skips hidden
-   * files and folders, symlinked folders, and the reserved folders.
-   */
+  /** Every file in the notes folder with one of `extensions`, leaving out hidden files and the reserved folders. */
   async list(extensions: readonly string[]): Promise<string[]> {
-    const found: string[] = [];
-    const walk = async (dir: string, prefix: string): Promise<void> => {
-      let entries: import('node:fs').Dirent[];
-      try {
-        entries = await fs.readdir(dir, { withFileTypes: true });
-      } catch (err) {
-        if (hasCode(err, 'ENOENT', 'ENOTDIR', 'EACCES')) return;
-        throw err;
-      }
-      for (const entry of entries) {
-        if (entry.name.startsWith('.')) continue;
-        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
-        if (entry.isDirectory()) {
-          if (!prefix && RESERVED_FOLDERS.has(entry.name.toLowerCase())) continue;
-          await walk(path.join(dir, entry.name), rel);
-        } else if (entry.isFile() && extensions.some((ext) => entry.name.toLowerCase().endsWith(ext))) {
-          found.push(rel.normalize('NFC'));
-        }
-      }
-    };
-    await walk(this.base, '');
-    return found.sort();
-  }
-
-  #assertInside(realPath: string): void {
-    const base = this.base;
-    if (realPath !== base && !realPath.startsWith(base + path.sep)) {
-      throw new PathError('That path leads outside the notes folder');
-    }
-  }
-
-  /** The file's real path if it exists, or null. Refuses symlinks that lead outside the notes folder. */
-  async #existingFile(rel: string): Promise<string | null> {
-    const real = await realpathOrNull(path.join(this.base, rel));
-    if (real !== null) this.#assertInside(real);
-    return real;
-  }
-
-  /** The path to write to, with its folders created. Refuses symlinks that lead outside the notes folder. */
-  async #writableFile(rel: string): Promise<string> {
-    const file = path.join(this.base, rel);
-    const dir = path.dirname(file);
-    // Check before creating anything, so a symlinked folder can't make us create folders elsewhere.
-    this.#assertInside(await realpathOfDeepestExisting(dir));
-    try {
-      await fs.mkdir(dir, { recursive: true, mode: 0o700 });
-    } catch (err) {
-      if (hasCode(err, 'EEXIST', 'ENOTDIR')) throw new PathError('A file is in the way of this path');
-      throw err;
-    }
-    this.#assertInside(await fs.realpath(dir));
-    const real = await realpathOrNull(file);
-    if (real !== null) this.#assertInside(real);
-    return real ?? file;
+    return (await this.disk.list('')).filter((rel) => {
+      const slash = rel.indexOf('/');
+      if (slash > 0 && RESERVED_FOLDERS.has(rel.slice(0, slash).toLowerCase())) return false;
+      const lower = rel.toLowerCase();
+      return extensions.some((ext) => lower.endsWith(ext));
+    });
   }
 
   /** Runs tasks for the same file one after another, so two writes can't interleave. */
   async #oneAtATime<T>(key: string, task: () => Promise<T>): Promise<T> {
-    const previous = this.#locks.get(key) ?? Promise.resolve();
-    const result = previous.then(task);
-    const settled = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    this.#locks.set(key, settled);
-    try {
-      return await result;
-    } finally {
-      if (this.#locks.get(key) === settled) this.#locks.delete(key);
-    }
+    return serialize(this.#locks, key, task);
   }
 }
 
-async function readText(file: string): Promise<string | null> {
-  let bytes: Buffer;
-  try {
-    bytes = await fs.readFile(file);
-  } catch (err) {
-    if (hasCode(err, 'ENOENT', 'ENOTDIR')) return null;
-    if (hasCode(err, 'EISDIR')) throw new PathError('That path is a folder, not a file');
-    throw err;
-  }
+const encoder = new TextEncoder();
+
+function decodeText(bytes: Uint8Array): string {
   try {
     return utf8.decode(bytes);
   } catch {
@@ -271,62 +173,18 @@ async function readText(file: string): Promise<string | null> {
   }
 }
 
-/** Writes to a temporary file, flushes it to disk, then renames it into place, so a crash never leaves half a file. */
-export async function atomicWrite(file: string, content: string | Uint8Array): Promise<void> {
-  const dir = path.dirname(file);
-  const temp = path.join(dir, `.${path.basename(file)}.${randomBytes(6).toString('hex')}.tmp`);
-  const mode = await fs.stat(file).then(
-    (stats) => stats.mode & 0o777,
-    () => 0o600,
+/** Runs tasks with the same key one after another (keeps a promise per key in `locks`). */
+export async function serialize<T>(locks: Map<string, Promise<void>>, key: string, task: () => Promise<T>): Promise<T> {
+  const previous = locks.get(key) ?? Promise.resolve();
+  const result = previous.then(task);
+  const settled = result.then(
+    () => undefined,
+    () => undefined,
   );
-  const handle = await fs.open(temp, 'wx', mode);
+  locks.set(key, settled);
   try {
-    await handle.chmod(mode);
-    await handle.writeFile(content);
-    await handle.sync();
-    await handle.close();
-    await fs.rename(temp, file);
-  } catch (err) {
-    await handle.close().catch(() => undefined);
-    await fs.rm(temp, { force: true });
-    throw err;
-  }
-  await syncFolder(dir);
-}
-
-async function syncFolder(dir: string): Promise<void> {
-  let handle: fs.FileHandle | undefined;
-  try {
-    handle = await fs.open(dir, 'r');
-    await handle.sync();
-  } catch {
-    // Not every platform can fsync a folder; the rename is atomic either way.
+    return await result;
   } finally {
-    await handle?.close().catch(() => undefined);
+    if (locks.get(key) === settled) locks.delete(key);
   }
-}
-
-async function realpathOrNull(p: string): Promise<string | null> {
-  try {
-    return await fs.realpath(p);
-  } catch (err) {
-    if (hasCode(err, 'ENOENT', 'ENOTDIR')) return null;
-    if (hasCode(err, 'ELOOP')) throw new PathError('That path is a symlink loop');
-    throw err;
-  }
-}
-
-async function realpathOfDeepestExisting(p: string): Promise<string> {
-  let current = p;
-  for (;;) {
-    const real = await realpathOrNull(current);
-    if (real !== null) return real;
-    const parent = path.dirname(current);
-    if (parent === current) throw new Error(`No existing folder above ${p}`);
-    current = parent;
-  }
-}
-
-export function hasCode(err: unknown, ...codes: string[]): boolean {
-  return typeof err === 'object' && err !== null && 'code' in err && codes.includes(String(err.code));
 }

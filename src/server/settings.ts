@@ -1,7 +1,6 @@
-import * as fs from 'node:fs/promises';
-import path from 'node:path';
 import type { SavedView, Settings } from '../shared/api.ts';
-import { atomicWrite, hasCode, normalizeNotePath } from './storage.ts';
+import type { Disk } from './disk.ts';
+import { normalizeNotePath } from './storage.ts';
 
 export const DEFAULT_SETTINGS: Settings = {
   pinned: [],
@@ -39,25 +38,27 @@ export function sanitizeSettings(input: unknown): Settings {
 
 /** Settings live in the notes folder (.notesapp/settings.json), so they travel with the notes and their history. */
 export class SettingsStore {
-  readonly #file: string;
+  static readonly FILE = '.notesapp/settings.json';
+  readonly #disk: Disk;
 
-  constructor(notesRoot: string) {
-    this.#file = path.join(notesRoot, '.notesapp', 'settings.json');
+  constructor(disk: Disk) {
+    this.#disk = disk;
   }
 
   async load(): Promise<Settings> {
+    const bytes = await this.#disk.read(SettingsStore.FILE);
+    if (bytes === null) return structuredClone(DEFAULT_SETTINGS);
     try {
-      return sanitizeSettings(JSON.parse(await fs.readFile(this.#file, 'utf8')));
+      return sanitizeSettings(JSON.parse(new TextDecoder().decode(bytes)));
     } catch (err) {
-      if (hasCode(err, 'ENOENT') || err instanceof SyntaxError) return structuredClone(DEFAULT_SETTINGS);
+      if (err instanceof SyntaxError) return structuredClone(DEFAULT_SETTINGS);
       throw err;
     }
   }
 
   async save(input: unknown): Promise<Settings> {
     const settings = sanitizeSettings(input);
-    await fs.mkdir(path.dirname(this.#file), { recursive: true, mode: 0o700 });
-    await atomicWrite(this.#file, `${JSON.stringify(settings, null, 2)}\n`);
+    await this.#disk.write(SettingsStore.FILE, new TextEncoder().encode(`${JSON.stringify(settings, null, 2)}\n`));
     return settings;
   }
 }

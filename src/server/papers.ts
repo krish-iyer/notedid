@@ -1,4 +1,3 @@
-import path from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
 import type { PaperSummary } from '../shared/api.ts';
 import { safeDecodeURI, splitFrontmatter } from '../shared/markdown.ts';
@@ -7,6 +6,7 @@ import { paperStatusOf } from '../shared/papers.ts';
 import { slugify, uniqueName } from '../shared/slug.ts';
 import { newNoteId, withNoteId } from '../shared/noteIds.ts';
 import { stemOf, stringList } from './analyze.ts';
+import { dirname } from './posixPath.ts';
 import type { NoteIndex } from './noteIndex.ts';
 import { NotFoundError, type NoteService } from './notes.ts';
 import { type NoteStore, PathError } from './storage.ts';
@@ -184,7 +184,7 @@ export class PaperService {
     const note = this.#deps.index.get(notePath);
     if (!note || note.kind !== 'paper') throw new NotFoundError(`${notePath} is not a paper`);
     if (typeof note.meta.pdf === 'string') throw new PathError('This paper already has a PDF');
-    const dir = path.posix.dirname(notePath);
+    const dir = dirname(notePath);
     const stem = stemOf(notePath);
     let pdfName = `${stem}.pdf`;
     for (let n = 2; await this.#deps.store.exists(`${dir}/${pdfName}`); n++) pdfName = `${stem}-${n}.pdf`;
@@ -214,7 +214,7 @@ export class PaperService {
     const papers = this.#deps.index.list().filter((n) => n.kind === 'paper');
     return Promise.all(
       papers.map(async (n) => {
-        const dir = path.posix.dirname(n.path);
+        const dir = dirname(n.path);
         const key = stemOf(n.path);
         const pdf = typeof n.meta.pdf === 'string' ? `${dir}/${n.meta.pdf}` : null;
         let highlights = 0;

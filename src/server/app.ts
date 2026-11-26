@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-import path from 'node:path';
 import { type Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
@@ -12,6 +10,7 @@ import { slugify, tagify } from '../shared/slug.ts';
 import type { EventHub } from './events.ts';
 import type { GitHistory } from './git.ts';
 import type { NoteIndex } from './noteIndex.ts';
+import { basename, extname } from './posixPath.ts';
 import { NotFoundError, type NoteService } from './notes.ts';
 import { type PaperService, UpstreamError } from './papers.ts';
 import type { SettingsStore } from './settings.ts';
@@ -46,6 +45,8 @@ export interface AppContext {
 export interface AppOptions {
   /** Port the server listens on; part of the host names it answers to. */
   port: number;
+  /** The host names (with port) it answers to, if not localhost on `port` (e.g. the web app's own, in a browser). */
+  hosts?: readonly string[];
   /** Browser origins allowed to send state-changing requests. */
   allowedOrigins: readonly string[];
 }
@@ -82,7 +83,7 @@ function todayFrom(value: unknown): string {
 
 export function createApp(ctx: AppContext, options: AppOptions): Hono {
   const app = new Hono();
-  const allowedHosts = new Set(['localhost', '127.0.0.1', '[::1]'].map((name) => `${name}:${options.port}`));
+  const allowedHosts = new Set(options.hosts ?? ['localhost', '127.0.0.1', '[::1]'].map((name) => `${name}:${options.port}`));
   const allowedOrigins = new Set(options.allowedOrigins);
 
   // Answer only to our own host names, so a web page can't reach this server through DNS rebinding.
@@ -226,7 +227,7 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     const bytes = await ctx.store.readBytes(rel);
     if (!bytes) throw new NotFoundError('No such file');
     return c.body(new Uint8Array(bytes), 200, {
-      'content-type': MIME[path.extname(rel).toLowerCase()] ?? 'application/octet-stream',
+      'content-type': MIME[extname(rel).toLowerCase()] ?? 'application/octet-stream',
       'x-content-type-options': 'nosniff',
       // Opened directly, a file (an SVG, say) can't run scripts in the app's origin.
       'content-security-policy': "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
@@ -238,10 +239,11 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     const form = await c.req.parseBody();
     const file = form.file;
     if (!(file instanceof File)) throw new BadRequest('Expected a file');
-    const ext = path.extname(file.name).toLowerCase();
+    const ext = extname(file.name).toLowerCase();
     if (!(FILE_EXTENSIONS as readonly string[]).includes(ext)) throw new BadRequest(`Files can be: ${FILE_EXTENSIONS.join(', ')}`);
-    const base = slugify(path.basename(file.name, path.extname(file.name)), 40);
-    const rel = `files/${new Date().getFullYear()}/${base}-${randomBytes(3).toString('hex')}${ext}`;
+    const base = slugify(basename(file.name, extname(file.name)), 40);
+    const suffix = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(3)), (b) => b.toString(16).padStart(2, '0')).join('');
+    const rel = `files/${new Date().getFullYear()}/${base}-${suffix}${ext}`;
     await ctx.store.createBytes(rel, new Uint8Array(await file.arrayBuffer()));
     ctx.history?.touch();
     return c.json({ path: rel });

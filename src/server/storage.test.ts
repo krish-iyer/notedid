@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { NodeDisk } from './nodeDisk.ts';
 import { ConflictError, EncodingError, hashContent, normalizeNotePath, NoteStore, PathError } from './storage.ts';
 
 let tmp: string;
@@ -11,8 +12,9 @@ let store: NoteStore;
 beforeEach(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'notesapp-store-'));
   notesDir = path.join(tmp, 'notes');
-  store = new NoteStore(notesDir);
-  await store.init();
+  const disk = new NodeDisk(notesDir);
+  await disk.init();
+  store = new NoteStore(disk);
 });
 
 afterEach(async () => {

@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseQuery } from '../shared/query.ts';
 import { GitHistory } from './git.ts';
+import { memoryDatabase } from './nodeSqlite.ts';
 import { NoteIndex } from './noteIndex.ts';
 import { appendBlock, formatCapture, rewriteLinks } from './notes.ts';
 import { isPdf, paperKey, paperNote, parseArxivFeed, parseCrossref, parsePaperId } from './papers.ts';
@@ -20,7 +21,7 @@ afterEach(async () => {
 });
 
 describe('NoteIndex', () => {
-  const index = new NoteIndex();
+  const index = new NoteIndex(memoryDatabase());
   const add = (p: string, content: string) => index.upsert(p, content, Date.parse('2026-11-20T10:00:00Z'), hashContent(content));
   add('notes/hbm.md', '---\naliases: [High Bandwidth Memory]\ntags: [hardware/memory]\n---\n# HBM\n\nStacked DRAM.\n');
   add('papers/smith2024.md', '---\ntype: paper\npdf: smith2024.pdf\n---\n# Fast kernels\n');

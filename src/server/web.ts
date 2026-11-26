@@ -29,7 +29,13 @@ async function readLimited(response: Response, maxBytes: number): Promise<string
     total += value.length;
   }
   await reader.cancel().catch(() => undefined);
-  return new TextDecoder().decode(Buffer.concat(chunks).subarray(0, maxBytes));
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.length;
+  }
+  return new TextDecoder().decode(bytes.subarray(0, maxBytes));
 }
 
 /** The title of a web page (og:title or <title>), or null. Only http(s); gives up after a few seconds. */

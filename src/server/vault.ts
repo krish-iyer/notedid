@@ -1,10 +1,10 @@
-import * as fs from 'node:fs/promises';
-import path from 'node:path';
 import type { VaultBlobInfo } from '../shared/api.ts';
-import { atomicWrite, hasCode, hashContent, PathError } from './storage.ts';
+import type { Disk } from './disk.ts';
+import { hashContent, PathError, serialize } from './storage.ts';
 
 const ID = /^[0-9a-f]{32}$/;
 const MAX_KEY_FILE_BYTES = 64 * 1024;
+const KEY_FILE = 'vault/key.json';
 
 /** The vault item (or key file) changed since the version the client had. */
 export class VaultConflict extends Error {
@@ -18,119 +18,79 @@ export class VaultConflict extends Error {
 }
 
 /**
- * Stores the vault's encrypted blobs and key file. Everything here is ciphertext made in the
- * browser; the server never sees a passphrase, a key or a decrypted note.
+ * Stores the vault's encrypted blobs and key file, in the notes folder's `vault/`. Everything here
+ * is ciphertext made in the browser; this code never sees a passphrase, a key or a decrypted note.
  */
 export class VaultStore {
-  readonly #notesRoot: string;
-  readonly #dir: string;
+  readonly #disk: Disk;
   readonly #locks = new Map<string, Promise<void>>();
 
-  constructor(notesRoot: string) {
-    this.#notesRoot = notesRoot;
-    this.#dir = path.join(notesRoot, 'vault');
+  constructor(disk: Disk) {
+    this.#disk = disk;
   }
 
-  async init(): Promise<void> {
-    await fs.mkdir(this.#dir, { recursive: true, mode: 0o700 });
-    const real = await fs.realpath(this.#dir);
-    if (!real.startsWith(await fs.realpath(this.#notesRoot))) throw new Error('The vault folder must be inside the notes folder');
-  }
-
-  #blobFile(id: string): string {
+  #blobPath(id: string): string {
     if (!ID.test(id)) throw new PathError('Invalid vault item');
-    return path.join(this.#dir, `${id}.bin`);
-  }
-
-  async #readFile(file: string): Promise<Buffer | null> {
-    try {
-      return await fs.readFile(file);
-    } catch (err) {
-      if (hasCode(err, 'ENOENT')) return null;
-      throw err;
-    }
-  }
-
-  async #oneAtATime<T>(key: string, task: () => Promise<T>): Promise<T> {
-    const previous = this.#locks.get(key) ?? Promise.resolve();
-    const result = previous.then(task);
-    const settled = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    this.#locks.set(key, settled);
-    try {
-      return await result;
-    } finally {
-      if (this.#locks.get(key) === settled) this.#locks.delete(key);
-    }
+    return `vault/${id}.bin`;
   }
 
   async keyFile(): Promise<{ text: string; hash: string } | null> {
-    const bytes = await this.#readFile(path.join(this.#dir, 'key.json'));
-    return bytes ? { text: bytes.toString('utf8'), hash: hashContent(bytes) } : null;
+    const bytes = await this.#disk.read(KEY_FILE);
+    return bytes ? { text: new TextDecoder().decode(bytes), hash: hashContent(bytes) } : null;
   }
 
   /** Creates the key file (baseHash null) or replaces it (passphrase change), checking the version. */
   async saveKeyFile(text: string, baseHash: string | null): Promise<{ hash: string }> {
-    if (Buffer.byteLength(text) > MAX_KEY_FILE_BYTES) throw new PathError('Key file too large');
+    const bytes = new TextEncoder().encode(text);
+    if (bytes.length > MAX_KEY_FILE_BYTES) throw new PathError('Key file too large');
     try {
       JSON.parse(text);
     } catch {
       throw new PathError('The key file must be JSON');
     }
-    return this.#oneAtATime('key', async () => {
-      const file = path.join(this.#dir, 'key.json');
-      const current = await this.#readFile(file);
+    return serialize(this.#locks, 'key', async () => {
+      const current = await this.#disk.read(KEY_FILE);
       const currentHash = current ? hashContent(current) : null;
       if (currentHash !== baseHash) throw new VaultConflict(currentHash);
-      await atomicWrite(file, text);
-      return { hash: hashContent(text) };
+      await this.#disk.write(KEY_FILE, bytes);
+      return { hash: hashContent(bytes) };
     });
   }
 
   async list(): Promise<VaultBlobInfo[]> {
-    const names = await fs.readdir(this.#dir).catch(() => [] as string[]);
     const items: VaultBlobInfo[] = [];
-    for (const name of names) {
-      const id = name.replace(/\.bin$/, '');
-      if (!name.endsWith('.bin') || !ID.test(id)) continue;
-      const file = path.join(this.#dir, name);
-      const [stats, bytes] = await Promise.all([fs.stat(file), fs.readFile(file)]);
-      items.push({ id, size: stats.size, mtime: stats.mtimeMs, hash: hashContent(bytes) });
+    for (const rel of await this.#disk.list('vault')) {
+      const id = /^vault\/([0-9a-f]{32})\.bin$/.exec(rel)?.[1];
+      if (!id) continue;
+      const [stats, bytes] = await Promise.all([this.#disk.stat(rel), this.#disk.read(rel)]);
+      if (stats && bytes) items.push({ id, size: stats.size, mtime: stats.mtime, hash: hashContent(bytes) });
     }
     return items;
   }
 
-  async read(id: string): Promise<{ bytes: Buffer; hash: string } | null> {
-    const bytes = await this.#readFile(this.#blobFile(id));
+  async read(id: string): Promise<{ bytes: Uint8Array; hash: string } | null> {
+    const bytes = await this.#disk.read(this.#blobPath(id));
     return bytes ? { bytes, hash: hashContent(bytes) } : null;
   }
 
   async write(id: string, bytes: Uint8Array, baseHash: string | null): Promise<{ hash: string }> {
-    const file = this.#blobFile(id);
-    return this.#oneAtATime(id, async () => {
-      const current = await this.#readFile(file);
+    const rel = this.#blobPath(id);
+    return serialize(this.#locks, id, async () => {
+      const current = await this.#disk.read(rel);
       const currentHash = current ? hashContent(current) : null;
       const hash = hashContent(bytes);
       if (currentHash === hash) return { hash };
       if (currentHash !== baseHash) throw new VaultConflict(currentHash);
-      await atomicWrite(file, bytes);
+      await this.#disk.write(rel, bytes);
       return { hash };
     });
   }
 
   /** Moves a vault item to vault/trash/ (still encrypted). */
   async remove(id: string): Promise<void> {
-    const file = this.#blobFile(id);
-    await this.#oneAtATime(id, async () => {
-      const trash = path.join(this.#dir, 'trash');
-      await fs.mkdir(trash, { recursive: true, mode: 0o700 });
-      try {
-        await fs.rename(file, path.join(trash, `${id}-${Date.now()}.bin`));
-      } catch (err) {
-        if (!hasCode(err, 'ENOENT')) throw err;
-      }
+    const rel = this.#blobPath(id);
+    await serialize(this.#locks, id, async () => {
+      if ((await this.#disk.stat(rel)) !== null) await this.#disk.move(rel, `vault/trash/${id}-${Date.now()}.bin`);
     });
   }
 }

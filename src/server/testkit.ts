@@ -12,6 +12,8 @@ import { SettingsStore } from './settings.ts';
 import { NoteStore } from './storage.ts';
 import { VaultStore } from './vault.ts';
 import type { FetchFn } from './web.ts';
+import { NodeDisk } from './nodeDisk.ts';
+import { memoryDatabase } from './nodeSqlite.ts';
 
 export const ORIGIN = 'http://127.0.0.1:4321';
 
@@ -24,19 +26,19 @@ export async function makeTestServer(options: { fetch?: FetchFn; history?: boole
     await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
     await fs.writeFile(path.join(dir, rel), content);
   }
-  const store = new NoteStore(dir);
-  await store.init();
-  const index = new NoteIndex();
+  const disk = new NodeDisk(dir);
+  await disk.init();
+  const store = new NoteStore(disk);
+  const index = new NoteIndex(memoryDatabase());
   const events = new EventHub();
-  const history = options.history ? new GitHistory(store.base, { delayMs: 60_000 }) : null;
+  const history = options.history ? new GitHistory(disk.base, { delayMs: 60_000 }) : null;
   if (history) await history.init();
   const notes = new NoteService({ store, index, events, history });
   await notes.loadAll();
-  const vault = new VaultStore(store.base);
-  await vault.init();
+  const vault = new VaultStore(disk);
   const fetchFn = options.fetch ?? offline;
   const papers = new PaperService({ store, index, notes, fetch: fetchFn });
-  const settings = new SettingsStore(store.base);
+  const settings = new SettingsStore(disk);
   const app = createApp({ store, index, events, notes, settings, papers, vault, history, fetch: fetchFn }, { port: 4321, allowedOrigins: [ORIGIN] });
   const received: ServerEvent[] = [];
   events.subscribe((e) => received.push(e));

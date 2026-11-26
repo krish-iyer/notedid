@@ -1,4 +1,3 @@
-import path from 'node:path';
 import type { CaptureRequest } from '../shared/api.ts';
 import { appendBlock, formatCapture } from '../shared/capture.ts';
 import { isISODate, journalDateOf, journalPath, localISODate, localTime } from '../shared/dates.ts';
@@ -11,6 +10,7 @@ import { stemOf } from './analyze.ts';
 import type { EventHub } from './events.ts';
 import type { GitHistory } from './git.ts';
 import { findMention, type NoteIndex } from './noteIndex.ts';
+import { dirname, join, relative as relativePath } from './posixPath.ts';
 import { ConflictError, hashContent, type NoteStore, normalizeNotePath, PathError } from './storage.ts';
 
 /** A request that can't be carried out as asked (bad input, or the thing isn't there). */
@@ -233,7 +233,7 @@ export class NoteService {
     });
 
     // 2. The file.
-    const dir = path.posix.dirname(rel);
+    const dir = dirname(rel);
     const existing = new Set(this.#index.paths());
     const slug = uniqueName(slugify(title), (candidate) => {
       const p = `${dir}/${candidate}.md`;
@@ -283,7 +283,7 @@ export class NoteService {
   /** Moves a note to trash/. Returns where it went. */
   async remove(rel: string): Promise<string> {
     if (!(await this.#store.exists(rel))) throw new NotFoundError(`${rel} does not exist`);
-    const dir = path.posix.dirname(rel);
+    const dir = dirname(rel);
     const stem = stemOf(rel);
     let target = `trash/${rel}`;
     for (let n = 2; await this.#store.exists(target); n++) target = `trash/${dir}/${stem}-${n}.md`;
@@ -376,16 +376,16 @@ export function rewriteLinks(content: string, src: string, oldKeys: Set<string>,
   const { bodyOffset } = splitFrontmatter(content);
   const { links } = analyzeBody(content.slice(bodyOffset), bodyOffset, lineIndex(content));
   const edits: { from: number; to: number; text: string }[] = [];
-  const srcDir = path.posix.dirname(src);
+  const srcDir = dirname(src);
   for (const link of links) {
     if (link.kind === 'wiki' && oldKeys.has(linkKey(link.target))) {
       const usesPath = link.target.includes('/');
       const target = usesPath ? newRel.replace(/\.md$/i, '') : newTitle;
       const inner = `${target}${link.heading ? `#${link.heading}` : ''}${link.label ? `|${link.label}` : ''}`;
       edits.push({ from: link.from, to: link.to, text: `[[${inner}]]` });
-    } else if (link.kind === 'md' && oldKeys.has(linkKey(path.posix.normalize(path.posix.join(srcDir, link.target))))) {
+    } else if (link.kind === 'md' && oldKeys.has(linkKey(join(srcDir, link.target)))) {
       const original = content.slice(link.from, link.to);
-      const relative = path.posix.relative(srcDir, newRel).replace(/ /g, '%20');
+      const relative = relativePath(srcDir, newRel).replace(/ /g, '%20');
       const hash = link.heading ? `#${link.heading}` : '';
       edits.push({ from: link.from, to: link.to, text: original.replace(/\]\([^)]*\)$/, `](${relative}${hash})`) });
     }
