@@ -188,7 +188,14 @@ export class SyncService {
       // This run is over, though it is still the running one until it returns.
       return { status: { ...(await this.status()), running: false }, more: !done };
     } catch (err) {
-      state.lastError = err instanceof DropboxError && err.signedOut ? 'Dropbox no longer lets the app in: connect again.' : err instanceof Error ? err.message : String(err);
+      state.lastError =
+        err instanceof DropboxError && err.missingScope
+          ? `The Dropbox app needs the permission ${err.missingScope}: tick it on the app’s Permissions tab at dropbox.com/developers/apps, then disconnect here and connect again.`
+          : err instanceof DropboxError && err.signedOut
+            ? 'Dropbox no longer lets the app in: connect again.'
+            : err instanceof Error
+              ? err.message
+              : String(err);
       await this.#saveState(state);
       throw err;
     }

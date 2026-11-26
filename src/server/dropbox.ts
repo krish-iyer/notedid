@@ -76,7 +76,12 @@ export class DropboxError extends Error {
 
   /** Signing in has to happen again (the app's access was removed, say). */
   get signedOut(): boolean {
-    return this.status === 401 || /invalid_grant/.test(this.summary);
+    return (this.status === 401 && !this.missingScope) || /invalid_grant/.test(this.summary);
+  }
+
+  /** The Dropbox app lacks a permission (its Permissions tab), e.g. `files.content.write`; null if that isn't the trouble. */
+  get missingScope(): string | null {
+    return /^missing_scope/.test(this.summary) ? (/needs (\S+)/.exec(this.message)?.[1] ?? 'one') : null;
   }
 }
 
@@ -121,8 +126,10 @@ async function failure(res: Response, what: string): Promise<DropboxError> {
   const text = await res.text().catch(() => '');
   let summary = '';
   try {
-    const body = JSON.parse(text) as { error_summary?: string; error?: string; error_description?: string };
-    summary = body.error_summary ?? body.error ?? '';
+    const body = JSON.parse(text) as { error_summary?: string; error?: string | { required_scope?: string }; error_description?: string };
+    summary = body.error_summary ?? (typeof body.error === 'string' ? body.error : '');
+    const scope = typeof body.error === 'object' ? body.error?.required_scope : undefined;
+    if (scope) return new DropboxError(`Dropbox: ${what} failed: the app needs ${scope}`, res.status, summary);
   } catch {
     summary = text.slice(0, 200);
   }
@@ -177,7 +184,7 @@ export class Dropbox {
       const res = await this.#fetch(url, { ...init(await this.#token(attempt > 0)), signal: AbortSignal.timeout(timeoutMs) });
       if (res.ok) return res;
       const error = await failure(res, what);
-      if (error.status === 401 && attempt === 0) continue;
+      if (error.status === 401 && !error.missingScope && attempt === 0) continue;
       throw error;
     }
   }

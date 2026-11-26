@@ -37,6 +37,8 @@ export class FakeDropbox {
   readonly calls: string[] = [];
   /** Answer the next calls with these (rate limits, outages). */
   readonly failNext: Response[] = [];
+  /** Permissions the Dropbox app was given (all of them unless a test takes some away). */
+  readonly scopes = new Set(['files.metadata.read', 'files.metadata.write', 'files.content.read', 'files.content.write', 'account_info.read']);
 
   /** Puts a file in the folder, as another device would. */
   put(path: string, content: string | Uint8Array, modified = Date.now()): string {
@@ -109,6 +111,8 @@ export class FakeDropbox {
     if (endpoint === 'oauth2/token') return this.#token(new URLSearchParams(String(init?.body ?? '')));
     const auth = headers.get('authorization')?.replace(/^Bearer /, '') ?? '';
     if (!this.#accessTokens.has(auth)) return json({ error_summary: 'expired_access_token/..', error: { '.tag': 'expired_access_token' } }, 401);
+    const needs = endpoint === 'files/list_folder' || endpoint === 'files/list_folder/continue' ? 'files.metadata.read' : endpoint === 'files/download' ? 'files.content.read' : endpoint === 'files/upload' || endpoint === 'files/delete_v2' ? 'files.content.write' : null;
+    if (needs && !this.scopes.has(needs)) return json({ error_summary: 'missing_scope/..', error: { '.tag': 'missing_scope', required_scope: needs } }, 401);
     const arg = headers.get('dropbox-api-arg');
     const args = (arg ? JSON.parse(arg) : init?.body ? JSON.parse(String(init.body)) : null) as Record<string, unknown> | null;
     const bodyBytes = async () => new Uint8Array(await new Response(init?.body ?? null).arrayBuffer());

@@ -227,6 +227,14 @@ describe('syncing with Dropbox', () => {
     expect(((await (await a.get('/api/sync')).json()) as SyncStatus).lastError).toMatch(/connect again/);
   });
 
+  it('says which permission the Dropbox app is missing', async () => {
+    const dropbox = new FakeDropbox();
+    const a = await device(dropbox, { 'notes/a.md': note('one') });
+    dropbox.scopes.delete('files.content.write');
+    expect((await a.post('/api/sync', {})).status).toBe(502);
+    expect(((await (await a.get('/api/sync')).json()) as SyncStatus).lastError).toMatch(/needs the permission files\.content\.write: tick it/);
+  });
+
   it('carries on where it stopped', async () => {
     const dropbox = new FakeDropbox();
     const a = await device(dropbox, { 'notes/a.md': note('one'), 'notes/b.md': '# B\n' });

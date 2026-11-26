@@ -77,7 +77,8 @@ function Connect() {
           “notedid-” and your initials).
         </li>
         <li>
-          On its <strong>Permissions</strong> tab, tick <strong>files.content.write</strong> and <strong>files.content.read</strong>, and press <strong>Submit</strong>.
+          On its <strong>Permissions</strong> tab, tick <strong>files.metadata.read</strong>, <strong>files.metadata.write</strong>, <strong>files.content.read</strong> and{' '}
+          <strong>files.content.write</strong>, and press <strong>Submit</strong>.
         </li>
         <li>
           On its <strong>Settings</strong> tab, copy the <strong>App key</strong>:
