@@ -50,12 +50,14 @@ async function errorFrom(res: Response): Promise<ApiError> {
   return new ApiError(res.status, message, body);
 }
 
+/** A request to the API. `body` goes as JSON, except form data and files (Blob), which go as they are. */
 async function call<T>(method: string, url: string, body?: unknown, init: RequestInit = {}): Promise<T> {
+  const raw = body instanceof FormData || body instanceof Blob;
   const res = await fetch(url, {
     method,
     ...init,
-    headers: body === undefined || body instanceof FormData ? init.headers : { 'content-type': 'application/json', ...init.headers },
-    body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
+    headers: body === undefined || raw ? init.headers : { 'content-type': 'application/json', ...init.headers },
+    body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
   });
   if (!res.ok) throw await errorFrom(res);
   return (await res.json()) as T;
@@ -93,6 +95,7 @@ export const api = {
   createDashboard: (title: string) => call<{ path: string }>('POST', '/api/note/create', { title, kind: 'dashboard' }),
   createBoard: (title: string, tag: string) => call<{ path: string }>('POST', '/api/note/create', { title, kind: 'board', tag }),
   noteIdStatus: () => call<{ notes: number; missing: number; copies: number }>('GET', '/api/ids'),
+  importNotes: (zip: Blob) => call<{ added: number; same: number; kept: string[]; skipped: string[] }>('POST', '/api/import', zip, { headers: { 'content-type': 'application/zip' } }),
   assignNoteIds: () => call<{ added: number; renewed: number }>('POST', '/api/ids'),
   renameNote: (path: string, title: string) => call<{ path: string; updated: string[] }>('POST', '/api/note/rename', { path, title }),
   deleteNote: (path: string) => call<{ trashPath: string }>('POST', '/api/note/delete', { path }),

@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { NoteSummary } from '../../shared/api.ts';
 import { fuzzyFilter, type FuzzyMatch } from '../../shared/fuzzy.ts';
-import { captureToToday, createBoard, createDashboard, createNote, giveNotesIds } from '../actions.ts';
+import { captureToToday, createBoard, createDashboard, createNote, exportNotes, giveNotesIds, importNotes } from '../actions.ts';
 import { navigate, noteHref } from '../router.ts';
 import { useNotes } from '../stores.ts';
 import { setTheme } from '../theme.ts';
@@ -27,6 +27,13 @@ function noteLabel(note: NoteSummary): string {
   return note.kind === 'journal' && note.date ? note.date : note.title;
 }
 
+/** Export and import: the whole notes folder as a zip. */
+const ARCHIVE: Item[] = [
+  { kind: 'action', id: 'export', icon: 'upload', label: 'Export all notes (.zip)', run: () => void exportNotes() },
+  { kind: 'action', id: 'import-folder', icon: 'folder', label: 'Import notes from a folder…', run: () => void importNotes('folder') },
+  { kind: 'action', id: 'import-zip', icon: 'folder', label: 'Import notes from a .zip…', run: () => void importNotes('zip') },
+];
+
 /** Ctrl+K: jump to any note, or turn what you typed into a note, a capture or a search. */
 export function Switcher({ onClose }: { onClose: () => void }) {
   const notes = useNotes();
@@ -46,6 +53,7 @@ export function Switcher({ onClose }: { onClose: () => void }) {
         { kind: 'action', id: 'theme-dark', icon: 'moon', label: 'Theme: dark', run: () => setTheme('dark') },
         { kind: 'action', id: 'theme-auto', icon: 'auto', label: 'Theme: follow the system', run: () => setTheme('auto') },
         { kind: 'action', id: 'note-ids', icon: 'check', label: 'Give every note an ID', run: () => void giveNotesIds() },
+        ...ARCHIVE,
       ];
     }
     const found = fuzzyFilter(notes, q, noteLabel, 30).map(({ item, match }): Item => ({ kind: 'note', note: item, match }));
@@ -57,6 +65,7 @@ export function Switcher({ onClose }: { onClose: () => void }) {
           { kind: 'action', id: 'theme-auto', icon: 'auto', label: 'Theme: follow the system', run: () => setTheme('auto') },
         ]
       : [];
+    if (/^(export|import|backup|zip)/i.test(q)) commands.push(...ARCHIVE);
     if (/^(give|ids?\b|note ids?)/i.test(q)) commands.push({ kind: 'action', id: 'note-ids', icon: 'check', label: 'Give every note an ID', run: () => void giveNotesIds() });
     const exact = notes.some((n) => n.title.toLowerCase() === q.toLowerCase());
     const actions: Item[] = [

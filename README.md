@@ -33,7 +33,9 @@ The same app can also run entirely in a browser, with no server: a service worke
 make browser  # build it and serve it → http://localhost:4323
 ```
 
-Notes there are kept in that browser only, separately from the Docker version's folder. Syncing between devices (through Dropbox) is the next step. Until then, a few things differ:
+Notes there are kept in that browser only, separately from the Docker version's folder. To bring notes in, use Ctrl+K → **Import notes from a folder…** (your notes folder) or **Import notes from a .zip…**. Ctrl+K → **Export all notes (.zip)** saves everything: notes, PDFs, the vault (still encrypted) and settings, as a backup or to move them. Import never replaces a note you already have. Both work in the Docker version too.
+
+Syncing between devices (through Dropbox) is the next step. Until then, a few things differ:
 
 - There is no version history yet (git needs a server). It comes back with the sync work.
 - Adding an arXiv paper gets its details from DataCite, because arXiv's own service doesn't answer browser requests. The PDF still comes from arXiv.

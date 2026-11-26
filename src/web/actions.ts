@@ -182,3 +182,76 @@ export async function giveNotesIds(): Promise<void> {
     showToast(`Could not give notes IDs: ${messageOf(err)}`, 'error');
   }
 }
+
+/**
+ * Ctrl+K "Export all notes": saves the whole notes folder as a zip (notes, PDFs, the vault still
+ * encrypted, settings). Fetched first and saved from memory: a plain download link would bypass the
+ * browser-only app's service worker, which is what holds the notes there.
+ */
+export async function exportNotes(): Promise<void> {
+  try {
+    showToast('Making the zip…');
+    const response = await fetch('/api/export');
+    if (!response.ok) throw new Error(`the app answered ${response.status}`);
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `notes-${localISODate()}.zip`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (err) {
+    showToast(`Could not export: ${messageOf(err)}`, 'error');
+  }
+}
+
+/** Picks files (a folder, or one zip), for the import below. */
+function pickFiles(options: { folder: boolean }): Promise<File[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    if (options.folder) input.webkitdirectory = true;
+    else input.accept = '.zip,application/zip';
+    input.onchange = () => resolve([...(input.files ?? [])]);
+    input.click();
+  });
+}
+
+/**
+ * Ctrl+K "Import notes from a folder…" or "…from a .zip…": adds the notes, PDFs and other files
+ * in it. Notes already here are never overwritten. A folder is zipped here first, leaving out
+ * hidden folders such as .git.
+ */
+export async function importNotes(from: 'folder' | 'zip'): Promise<void> {
+  const files = await pickFiles({ folder: from === 'folder' });
+  if (files.length === 0) return;
+  try {
+    let zip: Blob;
+    if (from === 'zip') {
+      zip = files[0] as File;
+    } else {
+      const { zipSync } = await import('fflate');
+      const entries: Record<string, Uint8Array> = {};
+      for (const file of files) {
+        const rel = file.webkitRelativePath || file.name;
+        const hidden = rel.split('/').some((part, i) => part.startsWith('.') && !(i === 1 && part === '.notesapp'));
+        if (!hidden) entries[rel] = new Uint8Array(await file.arrayBuffer());
+      }
+      zip = new Blob([zipSync(entries, { level: 0 })], { type: 'application/zip' });
+    }
+    showToast('Importing…');
+    const result = await api.importNotes(zip);
+    await refreshNotes();
+    const parts = [`${result.added} file${result.added === 1 ? '' : 's'} added`];
+    if (result.same) parts.push(`${result.same} already here`);
+    if (result.kept.length) {
+      const which = `${result.kept.slice(0, 3).join(', ')}${result.kept.length > 3 ? ', …' : ''}`;
+      parts.push(`${result.kept.length} not replaced, because yours ${result.kept.length === 1 ? 'is' : 'are'} different (${which})`);
+    }
+    if (result.skipped.length) parts.push(`${result.skipped.length} skipped (not notes or files the app uses)`);
+    showToast(`Imported: ${parts.join('; ')}.`);
+  } catch (err) {
+    showToast(`Could not import: ${messageOf(err)}`, 'error');
+  }
+}

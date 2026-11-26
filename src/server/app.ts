@@ -7,6 +7,7 @@ import { newDashboardContent } from '../shared/dashboard.ts';
 import { addDays, isISODate, localISODate } from '../shared/dates.ts';
 import { parseQuery } from '../shared/query.ts';
 import { slugify, tagify } from '../shared/slug.ts';
+import { exportZip, importZip } from './archive.ts';
 import type { EventHub } from './events.ts';
 import type { GitHistory } from './git.ts';
 import type { NoteIndex } from './noteIndex.ts';
@@ -269,6 +270,27 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     const saved = await ctx.store.writeText(rel, `${JSON.stringify(body.data, null, 2)}\n`, body.baseHash);
     ctx.history?.touch();
     return c.json(saved);
+  });
+
+  // ---- Export and import: the whole notes folder as a zip ----------------------------------------
+
+  app.get('/api/export', async (c) =>
+    c.body(new Uint8Array(await exportZip(ctx.store.disk)), 200, {
+      'content-type': 'application/zip',
+      'content-disposition': `attachment; filename="notes-${localISODate()}.zip"`,
+      'cache-control': 'no-store',
+    }),
+  );
+
+  app.post('/api/import', bodyLimit({ maxSize: 1024 * MB, onError: (c) => c.json({ error: 'The zip is larger than 1 GB' } satisfies ErrorResponse, 413) }), async (c) => {
+    if (c.req.header('content-type') !== 'application/zip') throw new BadRequest('Expected a zip file');
+    const result = await importZip(ctx.store.disk, new Uint8Array(await c.req.arrayBuffer()));
+    await ctx.notes.rescan();
+    ctx.history?.touch();
+    // Settings or a vault may have come with the notes.
+    ctx.events.emit({ type: 'settings' });
+    ctx.events.emit({ type: 'vault' });
+    return c.json(result);
   });
 
   // ---- Papers ----------------------------------------------------------------------------------
