@@ -9,7 +9,7 @@ import { DATA_EXTENSIONS, FILE_EXTENSIONS, NOTE_EXTENSIONS, normalizePath, PathE
  */
 
 /** The app's own top-level folders (a zip whose files all sit in one other folder was made from that folder). */
-const APP_FOLDERS = new Set(['notes', 'journal', 'papers', 'boards', 'dashboards', 'files', 'trash', 'vault', '.notesapp']);
+const APP_FOLDERS = new Set(['notes', 'journal', 'papers', 'boards', 'dashboards', 'files', 'trash', 'vault', '.notedid', '.notesapp']);
 /** Formats that are compressed already: stored as they are. */
 const COMPRESSED = /\.(pdf|png|jpe?g|gif|webp)$/i;
 const VAULT_FILE = /^vault\/(key\.json|[0-9a-f]{32}\.bin|trash\/[0-9a-f]{32}-\d+\.bin)$/;
@@ -65,7 +65,9 @@ export async function importZip(disk: Disk, zip: Uint8Array): Promise<ImportResu
   const root = madeFrom(names);
   const result: ImportResult = { added: 0, same: 0, kept: [], skipped: [] };
   for (const name of names) {
-    const rel = (root ? name.slice(root.length + 1) : name).normalize('NFC');
+    const inZip = (root ? name.slice(root.length + 1) : name).normalize('NFC');
+    // Settings from before the app was named notedid go where they are kept now.
+    const rel = inZip === SettingsStore.OLD_FILE ? SettingsStore.FILE : inZip;
     const bytes = entries[name];
     if (!bytes || !importable(rel)) {
       if (!/(^|\/)(\.DS_Store|Thumbs\.db)$/.test(rel)) result.skipped.push(rel);

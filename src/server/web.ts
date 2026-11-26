@@ -2,7 +2,7 @@
 
 export type FetchFn = typeof fetch;
 
-export const USER_AGENT = 'notesapp/0.1 (personal notes app)';
+export const USER_AGENT = 'notedid/0.1 (personal notes app)';
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
 

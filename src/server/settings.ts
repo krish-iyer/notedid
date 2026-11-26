@@ -36,13 +36,22 @@ export function sanitizeSettings(input: unknown): Settings {
   return { pinned, views, vaultAutoLockMinutes };
 }
 
-/** Settings live in the notes folder (.notesapp/settings.json), so they travel with the notes and their history. */
+/** Settings live in the notes folder (.notedid/settings.json), so they travel with the notes and their history. */
 export class SettingsStore {
-  static readonly FILE = '.notesapp/settings.json';
+  static readonly FILE = '.notedid/settings.json';
+  /** Where they were before the app was named notedid. */
+  static readonly OLD_FILE = '.notesapp/settings.json';
   readonly #disk: Disk;
 
   constructor(disk: Disk) {
     this.#disk = disk;
+  }
+
+  /** Moves the settings from where the app kept them before it was named notedid. True if it moved them. */
+  async migrate(): Promise<boolean> {
+    if ((await this.#disk.stat(SettingsStore.FILE)) !== null || (await this.#disk.stat(SettingsStore.OLD_FILE)) === null) return false;
+    await this.#disk.move(SettingsStore.OLD_FILE, SettingsStore.FILE);
+    return true;
   }
 
   async load(): Promise<Settings> {

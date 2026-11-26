@@ -39,6 +39,7 @@ export async function makeTestServer(options: { fetch?: FetchFn; history?: boole
   const fetchFn = options.fetch ?? offline;
   const papers = new PaperService({ store, index, notes, fetch: fetchFn });
   const settings = new SettingsStore(disk);
+  await settings.migrate();
   const app = createApp({ store, index, events, notes, settings, papers, vault, history, fetch: fetchFn }, { port: 4321, allowedOrigins: [ORIGIN] });
   const received: ServerEvent[] = [];
   events.subscribe((e) => received.push(e));

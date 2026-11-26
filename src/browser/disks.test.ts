@@ -61,11 +61,11 @@ describe.each(makers)('%s', (_name, make) => {
 
   it('lists files below a folder, sorted, leaving out hidden ones', async () => {
     const disk = await make();
-    for (const rel of ['notes/b.md', 'notes/a.md', 'journal/2026-11-26.md', 'vault/k.bin', 'vault/trash/old.bin', '.notesapp/settings.json', 'notes/.draft.md']) await disk.write(rel, text(rel));
+    for (const rel of ['notes/b.md', 'notes/a.md', 'journal/2026-11-26.md', 'vault/k.bin', 'vault/trash/old.bin', '.notedid/settings.json', 'notes/.draft.md']) await disk.write(rel, text(rel));
     expect(await disk.list('')).toEqual(['journal/2026-11-26.md', 'notes/a.md', 'notes/b.md', 'vault/k.bin', 'vault/trash/old.bin']);
     expect(await disk.list('vault')).toEqual(['vault/k.bin', 'vault/trash/old.bin']);
     expect(await disk.list('nothing')).toEqual([]);
     // Hidden files are still there for whoever asks for them by name (settings).
-    expect(str(await disk.read('.notesapp/settings.json'))).toBe('.notesapp/settings.json');
+    expect(str(await disk.read('.notedid/settings.json'))).toBe('.notedid/settings.json');
   });
 });

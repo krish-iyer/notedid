@@ -1,6 +1,6 @@
-# notesapp
+# notedid
 
-A personal notes app: plain markdown files, quick capture, fast search, papers with PDF highlights, project boards, and an encrypted vault. Self-hosted; your notes are ordinary files in a folder you choose.
+notedid is a personal notes app: plain markdown files, quick capture, fast search, papers with PDF highlights, project boards, and an encrypted vault. Your notes are ordinary files in a folder you choose. It runs with a small server in Docker, or entirely in a browser.
 
 [docs/SPEC.md](docs/SPEC.md) has the design and the milestones. Milestones 1–5 are built; the phone milestone and AI features are postponed.
 
@@ -144,7 +144,7 @@ boards/<name>.md              project boards
 files/2026/…                  pasted images and files
 trash/                        deleted notes
 vault/                        encrypted vault notes and key file
-.notesapp/settings.json       pinned notes, saved views, vault lock time
+.notedid/settings.json        pinned notes, saved views, vault lock time
 .git/                         the history
 ```
 

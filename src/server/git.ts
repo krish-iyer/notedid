@@ -3,9 +3,9 @@ import { realpath } from 'node:fs/promises';
 import type { HistoryEntry } from '../shared/api.ts';
 
 const GIT_ENV = {
-  GIT_AUTHOR_NAME: 'Notes app',
+  GIT_AUTHOR_NAME: 'notedid',
   GIT_AUTHOR_EMAIL: 'notes@localhost',
-  GIT_COMMITTER_NAME: 'Notes app',
+  GIT_COMMITTER_NAME: 'notedid',
   GIT_COMMITTER_EMAIL: 'notes@localhost',
   GIT_TERMINAL_PROMPT: '0',
 };

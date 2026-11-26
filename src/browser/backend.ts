@@ -37,6 +37,7 @@ export async function startBackend(): Promise<Hono> {
   const vault = new VaultStore(disk);
   const papers = new PaperService({ store, index, notes, fetch: browserFetch });
   const settings = new SettingsStore(disk);
+  await settings.migrate();
   const channel = new BroadcastChannel(EVENTS_CHANNEL);
   events.subscribe((event) => channel.postMessage(event));
   return createApp(

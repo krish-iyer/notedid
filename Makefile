@@ -25,7 +25,7 @@ dev: $(DEPS) | $(SETUP)
 
 start: $(DEPS) | $(SETUP)
 	$(COMPOSE) up -d dev
-	@echo "Notes app starting at http://localhost:$${WEB_PORT:-4322}  (make logs: follow output, make down: stop)"
+	@echo "notedid starting at http://localhost:$${WEB_PORT:-4322}  (make logs: follow output, make down: stop)"
 
 logs: | .env
 	$(COMPOSE) logs -f dev

@@ -89,7 +89,7 @@ export function App() {
           <button type="button" className="icon-button" aria-label="Menu" onClick={() => setMenu(true)}>
             <Icon name="menu" />
           </button>
-          <span className="brand">Notes</span>
+          <span className="brand">notedid</span>
           <button type="button" className="icon-button" aria-label="Find or create" onClick={() => setSwitcher(true)}>
             <Icon name="search" />
           </button>

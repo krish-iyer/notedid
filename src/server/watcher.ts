@@ -4,7 +4,7 @@ import path from 'node:path';
 /**
  * Watches the notes folder for changes made outside the app (another editor, a sync tool).
  * Calls `onChange` with the changed file's relative path, or null when the platform can't say.
- * Hidden files and folders (.git, .notesapp, temporary files) are ignored. Returns a stop function.
+ * Hidden files and folders (.git, .notedid, temporary files) are ignored. Returns a stop function.
  */
 export function watchFolder(root: string, onChange: (rel: string | null) => void): () => void {
   const timers = new Map<string, ReturnType<typeof setTimeout>>();

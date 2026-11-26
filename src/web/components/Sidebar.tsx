@@ -39,7 +39,7 @@ export function Sidebar({ open, onClose, onOpenSwitcher }: { open: boolean; onCl
       {open && <div className="sidebar-scrim" onClick={onClose} aria-hidden="true" />}
       <nav className={open ? 'sidebar open' : 'sidebar'} aria-label="Main">
         <div className="sidebar-top">
-          <span className="brand">Notes</span>
+          <span className="brand">notedid</span>
           <button type="button" className="icon-button sidebar-close" aria-label="Close menu" onClick={onClose}>
             <Icon name="close" />
           </button>

@@ -1,8 +1,8 @@
 {
-  "name": "notesapp",
+  "name": "notedid",
   "version": "0.1.0",
   "private": true,
-  "description": "Personal notes app: plain markdown files, quick capture from desktop and phone, self-hosted.",
+  "description": "notedid: personal notes as plain markdown files, with papers, boards and a vault. Runs with a small server or entirely in a browser.",
   "type": "module",
   "engines": {
     "node": ">=24"

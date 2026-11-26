@@ -36,17 +36,17 @@ describe('export and import', () => {
       'trash/notes/old.md': '# Old\n',
       [`vault/${VAULT_ID}.bin`]: new Uint8Array([1, 2, 3]),
       'vault/key.json': '{"v":1}',
-      '.notesapp/settings.json': '{"pinned":[]}\n',
+      '.notedid/settings.json': '{"pinned":[]}\n',
     });
     await fs.mkdir(path.join(from.base, '.git'), { recursive: true });
     await fs.writeFile(path.join(from.base, '.git', 'HEAD'), 'ref: refs/heads/main\n');
     const zip = await exportZip(from);
-    expect(Object.keys(unzipSync(zip)).sort()).toEqual(['.notesapp/settings.json', 'journal/2026-11-26.md', 'notes/a.md', 'papers/x.highlights.json', 'papers/x.md', 'papers/x.pdf', 'trash/notes/old.md', `vault/${VAULT_ID}.bin`, 'vault/key.json']);
+    expect(Object.keys(unzipSync(zip)).sort()).toEqual(['.notedid/settings.json', 'journal/2026-11-26.md', 'notes/a.md', 'papers/x.highlights.json', 'papers/x.md', 'papers/x.pdf', 'trash/notes/old.md', `vault/${VAULT_ID}.bin`, 'vault/key.json']);
 
     const to = await folder();
     expect(await importZip(to, zip)).toEqual({ added: 9, same: 0, kept: [], skipped: [] });
     for (const rel of await from.list('')) expect(await to.read(rel)).toEqual(await from.read(rel));
-    expect(new TextDecoder().decode((await to.read('.notesapp/settings.json')) ?? new Uint8Array())).toBe('{"pinned":[]}\n');
+    expect(new TextDecoder().decode((await to.read('.notedid/settings.json')) ?? new Uint8Array())).toBe('{"pinned":[]}\n');
     // Importing the same again adds nothing.
     expect(await importZip(to, zip)).toEqual({ added: 0, same: 9, kept: [], skipped: [] });
   });
@@ -68,9 +68,17 @@ describe('export and import', () => {
     expect(await to.list('')).toEqual(['files/2026/p.png', 'notes/mine.md', 'notes/new.md']);
   });
 
+  it('puts the settings of an export from before the app was named notedid where they are kept now', async () => {
+    const to = await folder();
+    const zip = zipSync({ 'notes/a.md': text('# A\n'), '.notesapp/settings.json': text('{"pinned":[]}\n') });
+    expect(await importZip(to, zip)).toEqual({ added: 2, same: 0, kept: [], skipped: [] });
+    expect(await to.read('.notedid/settings.json')).not.toBeNull();
+    expect(await to.read('.notesapp/settings.json')).toBeNull();
+  });
+
   it('refuses paths that would leave the folder or hide', () => {
     for (const bad of ['../x.md', '/etc/passwd.md', 'notes/../../x.md', '.git/config', 'notes/.hidden.md', 'a\\b.md', 'notes/x.exe', 'vault/x.md', '']) expect(importable(bad)).toBe(false);
-    for (const good of ['notes/a.md', 'papers/x.pdf', 'papers/x.highlights.json', '.notesapp/settings.json', `vault/${VAULT_ID}.bin`, 'vault/key.json', `vault/trash/${VAULT_ID}-1732600000000.bin`]) expect(importable(good)).toBe(true);
+    for (const good of ['notes/a.md', 'papers/x.pdf', 'papers/x.highlights.json', '.notedid/settings.json', `vault/${VAULT_ID}.bin`, 'vault/key.json', `vault/trash/${VAULT_ID}-1732600000000.bin`]) expect(importable(good)).toBe(true);
   });
 });
 

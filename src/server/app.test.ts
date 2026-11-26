@@ -192,12 +192,23 @@ describe('tasks and capture', () => {
 });
 
 describe('settings and data files', () => {
+  it('moves settings from the folder the app used before it was named notedid', async () => {
+    const old = await makeTestServer({ files: { '.notesapp/settings.json': '{"pinned":["notes/groceries.md"],"views":[],"vaultAutoLockMinutes":5}\n' } });
+    try {
+      expect(((await (await old.get('/api/settings')).json()) as Settings).pinned).toEqual(['notes/groceries.md']);
+      expect(JSON.parse(await old.read('.notedid/settings.json')).vaultAutoLockMinutes).toBe(5);
+      await expect(old.read('.notesapp/settings.json')).rejects.toThrow();
+    } finally {
+      await old.cleanup();
+    }
+  });
+
   it('has defaults and saves cleaned-up settings', async () => {
     const defaults = (await (await s.get('/api/settings')).json()) as Settings;
     expect(defaults.views.length).toBeGreaterThan(0);
     const saved = (await (await s.put('/api/settings', { pinned: ['notes/groceries.md', '../x.md'], views: [{ name: 'FPGA', query: 'tag:fpga' }], vaultAutoLockMinutes: 5 })).json()) as Settings;
     expect(saved).toEqual({ pinned: ['notes/groceries.md'], views: [{ name: 'FPGA', query: 'tag:fpga' }], vaultAutoLockMinutes: 5 });
-    expect(JSON.parse(await s.read('.notesapp/settings.json'))).toEqual(saved);
+    expect(JSON.parse(await s.read('.notedid/settings.json'))).toEqual(saved);
   });
 
   it('stores JSON data files with conflict checks', async () => {

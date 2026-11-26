@@ -1,10 +1,10 @@
-# Notes app: spec
+# notedid: spec
 
 Status: milestones 1–5 built (2026-11-25). The phone milestone and AI are postponed. §15 lists where the build differs from this plan.
 
 ## 1. What we're building
 
-A personal notes app, self-hosted on the home network and used from a desktop browser and a phone.
+notedid is a personal notes app, used from a desktop browser and a phone. It runs with a small server, or entirely in a browser.
 
 It solves four problems:
 
@@ -46,7 +46,7 @@ Not in scope for now:
  desktop browser ───────────┼── HTTPS ──► Caddy ──► app server (Node + Hono)
  `note` CLI ────────────────┘  notes.example.com        │
                                                          ├─► $NOTES_DIR/**/*.md     source of truth; auto-committed to git
-                                                         ├─► $NOTES_DIR/.notesapp/  index.sqlite and caches (derived)
+                                                         ├─► $NOTES_DIR/.notedid/   settings
                                                          └─► $NOTES_DIR/vault/      ciphertext only (M5)
 ```
 
@@ -70,7 +70,7 @@ $NOTES_DIR/
   files/2026/<name>.<ext>      attachments: images, other files
   trash/                       deleted notes, restorable
   vault/                       encrypted blobs (M5)
-  .notesapp/                   settings.json (committed with the notes)
+  .notedid/                    settings.json (committed with the notes)
 ```
 
 ### 4.2 Notes
@@ -118,7 +118,7 @@ $NOTES_DIR/
   | time | `after:2026-10-01`, `before:2026-11-01` |
   | content | `has:link`, `has:pdf`, `has:task` |
 
-- **Views.** Saved searches pinned in the sidebar, such as Tasks, Papers, Groceries and This week. They are stored in `.notesapp/settings.json`.
+- **Views.** Saved searches pinned in the sidebar, such as Tasks, Papers, Groceries and This week. They are stored in `.notedid/settings.json`.
 - **Backlinks and unlinked mentions.** Every note shows both. Unlinked mentions are notes that use this note's title without linking it; one click turns each mention into a link.
 - **Tasks view.** Open tasks from all notes, grouped into overdue, today, upcoming and no date. Ticking a task there changes only that line in its note.
 
@@ -314,7 +314,8 @@ Added after the first review (2026-11-25):
 - **Cards.** A heading with `key:: value` lines directly under it is a card (`src/shared/cards.ts`: headings outside code and front matter, levels 2–6; deeper headings are part of the card's text; cards one after another at one level form a set, identified by the section it's in). The editor draws each card as a block widget and puts a bar above each set (counts, a status colour bar, filter chips per property whose values are short words, search, + Card). The card with the cursor shows as its markdown, framed. Filtered-out cards are replaced without a widget: the arrow keys pass over them through a transaction filter, not atomic ranges, so a deletion next to one never removes it. ↑ ↓ enter a card from the lines around it, because CodeMirror would otherwise jump over a block widget. Pills change one value on its line; + Card copies the last card's keys and fills in any filtered values. + Attach (and dropping files on a card) adds `[[note]]` links or uploaded files (`files/`, as relative links) to an `attached::` line, made after the last property when missing; a note's link is its title when that resolves to it, otherwise its path labelled with the title. The × on a link chip removes that value, and the line when it empties (unless it is the card's only property). Filters are view state in `localStorage` (`notesapp-card-filters:<path>`), never for vault notes. While comparing versions, cards show as text so the change marks stay visible. Cards and the bar are drawn by `cardView.ts`, which the reading view uses too: there they are read-only, and the filters work without being saved.
 - **Note ids.** Front matter `id:` (`src/shared/noteIds.ts`). The server writes it into notes it makes (new notes, boards, dashboards, papers, a day's first capture), and the browser into notes it makes: a new journal day's or new note's first save (added to the open editor too, outside the undo history), the reading view's comments note, the papers' collections. A save never adds or changes an id, so the file is always exactly what the editor sent. `GET /api/ids` counts notes without an id and copies that share one; `POST /api/ids` gives the first a new id each and the copies new ones (the oldest file keeps the shared id), changing only that line, committed to the history as one step. The index keeps each note's id (`NoteSummary.id`). The editor hides front matter that holds nothing but the id. Ids are what syncing between devices will follow.
 - **The browser-only app.** `npm run build:browser` (`make browser` serves it on :4323) builds the web client with `__BROWSER_APP__` set, plus `/sw.js`: one classic script (so every browser with service workers can run it) holding the backend. Its `import.meta.url` is the worker's address, so SQLite finds its `.wasm`. The worker answers `/api/*` with the backend (started on the first request, the index rebuilt from IndexedDB) and serves the app's files from a cache filled at install, so the app opens offline. A new build is a new worker and cache. Not there yet: version history (no git), syncing (next: Dropbox). arXiv details come from DataCite (arXiv's API doesn't allow browser requests; the server falls back to it too when arXiv is down); page titles for pasted links aren't fetched. The app asks the browser to keep its storage (`navigator.storage.persist()`).
-- **Export and import.** `GET /api/export` is the notes folder as a zip: every visible file, the trash, the vault's ciphertext and `.notesapp/settings.json`, but not `.git`. `POST /api/import` takes a zip (`application/zip`, up to 1 GB). It adds the files that are the app's: notes, data files, PDFs and pictures, vault files and settings. It drops a single top folder the zip was made from (`dev-notes/`), and never overwrites: identical files count as already there, and different ones are listed and left alone. Then it rescans. A folder import is zipped in the browser first, without hidden folders. The browser saves an export by fetching it and saving the result, because a download link would bypass the browser-only app's service worker.
+- **Export and import.** `GET /api/export` is the notes folder as a zip: every visible file, the trash, the vault's ciphertext and `.notedid/settings.json`, but not `.git`. `POST /api/import` takes a zip (`application/zip`, up to 1 GB). It adds the files that are the app's: notes, data files, PDFs and pictures, vault files and settings. It drops a single top folder the zip was made from (`dev-notes/`), and never overwrites: identical files count as already there, and different ones are listed and left alone. Then it rescans. A folder import is zipped in the browser first, without hidden folders. The browser saves an export by fetching it and saving the result, because a download link would bypass the browser-only app's service worker.
+- **The name.** The app is called notedid (it was "notesapp" while it was being built). Its folder in the notes folder is `.notedid/`; settings found in the old `.notesapp/` are moved there at startup, and an old export's settings import to the new place. Names nobody sees stay as they were, because existing data depends on them: browser storage keys, the browser app's database, the vault's encryption label.
 - **Ticked tasks.** A ticked task's text is struck through and greyed: in the editor a mark over the GFM `Task` node after its checkbox, in cards and the reading view by CSS on the list item.
 - **Widget spacing.** Block widgets (cards, tables, folded quotes) get their spacing from padding on their outer element. CodeMirror measures a widget's height without its margins, so margins made clicks and arrow keys land on the wrong line below a few widgets.
 - **Adding to boards.** Note and paper pages have an "Add to a project board" button. On a board, **+ Add card** accepts a title, a journal date, an arXiv link or DOI, or a URL, and offers **Create note** for anything else. A board tag typed as `[[x]]` or `#x` is stored as `x`.

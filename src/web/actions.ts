@@ -235,7 +235,7 @@ export async function importNotes(from: 'folder' | 'zip'): Promise<void> {
       const entries: Record<string, Uint8Array> = {};
       for (const file of files) {
         const rel = file.webkitRelativePath || file.name;
-        const hidden = rel.split('/').some((part, i) => part.startsWith('.') && !(i === 1 && part === '.notesapp'));
+        const hidden = rel.split('/').some((part, i) => part.startsWith('.') && !(i === 1 && (part === '.notedid' || part === '.notesapp')));
         if (!hidden) entries[rel] = new Uint8Array(await file.arrayBuffer());
       }
       zip = new Blob([zipSync(entries, { level: 0 })], { type: 'application/zip' });

@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { readFile } from 'node:fs/promises';
+import { readFile, rmdir } from 'node:fs/promises';
 import path from 'node:path';
 import { createApp } from './app.ts';
 import { loadConfig } from './config.ts';
@@ -34,6 +34,9 @@ const count = await notes.loadAll();
 const vault = new VaultStore(disk);
 const papers = new PaperService({ store, index, notes, fetch });
 const settings = new SettingsStore(disk);
+if (await settings.migrate()) history.touch();
+// The folder the app used before it was named notedid, once its settings have moved out (rmdir only removes an empty folder).
+await rmdir(path.join(disk.base, '.notesapp')).catch(() => undefined);
 const stopWatching = watchFolder(disk.base, (rel) => notes.onFileEvent(rel));
 
 const app = createApp(
@@ -54,7 +57,7 @@ if (config.production) {
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   const shownHost = config.host === '::1' ? '[::1]' : config.host;
   const devHint = config.production ? '' : ` (open the web app at http://localhost:${config.webPort})`;
-  console.log(`notesapp API on http://${shownHost}:${info.port}${devHint}`);
+  console.log(`notedid API on http://${shownHost}:${info.port}${devHint}`);
   console.log(`notes folder: ${config.notesDir} (${count} notes indexed in ${Date.now() - started} ms, history ${historyOn ? 'on' : 'off'})`);
 });
 
