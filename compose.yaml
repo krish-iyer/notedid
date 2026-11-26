@@ -1,0 +1,32 @@
+# Development environment. Use it through the Makefile (make dev, make check, ...); see README.md.
+services:
+  dev:
+    build:
+      context: .
+      target: dev
+    image: notesapp-dev
+    init: true
+    # Run as your own user, so files created in the repo (node_modules, dist, dev-notes) belong to you.
+    # `make` writes HOST_UID and HOST_GID to .env the first time it runs.
+    user: "${HOST_UID:?run make first, it creates .env}:${HOST_GID:?run make first, it creates .env}"
+    command: npm run dev
+    environment:
+      # Vite listens on the container's network interface. The API server stays on the
+      # container's own localhost, and Vite proxies /api to it.
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: ${WEB_PORT:-4322}
+      NOTES_DIR: /notes
+      TZ: ${TZ:-UTC}
+      HISTORY_DELAY_SECONDS: ${HISTORY_DELAY_SECONDS:-60}
+    ports:
+      # Published on this machine's localhost only: there is no login yet.
+      - "127.0.0.1:${WEB_PORT:-4322}:${WEB_PORT:-4322}"
+    volumes:
+      - .:/app
+      - type: bind
+        source: ${NOTES_HOST_DIR:-./dev-notes}
+        target: /notes
+      - npm-cache:/cache/npm
+
+volumes:
+  npm-cache:
