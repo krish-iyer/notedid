@@ -12,6 +12,7 @@ import { NoteIndex } from './noteIndex.ts';
 import { NoteService } from './notes.ts';
 import { PaperService } from './papers.ts';
 import { SettingsStore } from './settings.ts';
+import { SyncService } from './sync.ts';
 import { NoteStore } from './storage.ts';
 import { VaultStore } from './vault.ts';
 import { VersionHistory } from './versions.ts';
@@ -37,13 +38,14 @@ const count = await notes.loadAll();
 const vault = new VaultStore(disk);
 const papers = new PaperService({ store, index, notes, fetch });
 const settings = new SettingsStore(disk);
+const sync = new SyncService({ disk, notes, versions, events, fetch });
 if (await settings.migrate()) git?.touch();
 // The folder the app used before it was named notedid, once its settings have moved out (rmdir only removes an empty folder).
 await rmdir(path.join(disk.base, '.notesapp')).catch(() => undefined);
 const stopWatching = watchFolder(disk.base, (rel) => notes.onFileEvent(rel));
 
 const app = createApp(
-  { store, index, events, notes, settings, papers, vault, versions, git, fetch },
+  { store, index, events, notes, settings, papers, vault, versions, git, sync, fetch },
   { port: config.port, allowedOrigins: config.allowedOrigins },
 );
 

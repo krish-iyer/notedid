@@ -8,6 +8,7 @@ import { NoteIndex } from '../server/noteIndex.ts';
 import { NoteService } from '../server/notes.ts';
 import { PaperService } from '../server/papers.ts';
 import { SettingsStore } from '../server/settings.ts';
+import { SyncService } from '../server/sync.ts';
 import { NoteStore } from '../server/storage.ts';
 import { VaultStore } from '../server/vault.ts';
 import { VersionHistory } from '../server/versions.ts';
@@ -47,10 +48,11 @@ export async function startBackend(): Promise<Backend> {
   const papers = new PaperService({ store, index, notes, fetch: browserFetch });
   const settings = new SettingsStore(disk);
   await settings.migrate();
+  const sync = new SyncService({ disk, notes, versions, events, fetch: browserFetch });
   const channel = new BroadcastChannel(EVENTS_CHANNEL);
   events.subscribe((event) => channel.postMessage(event));
   const app = createApp(
-    { store, index, events, notes, settings, papers, vault, versions, git: null, fetch: browserFetch },
+    { store, index, events, notes, settings, papers, vault, versions, git: null, sync, fetch: browserFetch },
     { port: Number(location.port) || (location.protocol === 'https:' ? 443 : 80), hosts: [location.host], allowedOrigins: [location.origin] },
   );
   return { app, idle: () => versions.idle() };

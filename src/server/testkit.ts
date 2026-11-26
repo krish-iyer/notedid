@@ -9,6 +9,7 @@ import { NoteIndex } from './noteIndex.ts';
 import { NoteService } from './notes.ts';
 import { PaperService } from './papers.ts';
 import { SettingsStore } from './settings.ts';
+import { SyncService } from './sync.ts';
 import { NoteStore } from './storage.ts';
 import { VaultStore } from './vault.ts';
 import { VersionHistory } from './versions.ts';
@@ -21,7 +22,7 @@ export const ORIGIN = 'http://127.0.0.1:4321';
 const offline: FetchFn = async () => new Response('offline', { status: 503 });
 
 /** A complete server over a temporary notes folder, for tests. */
-export async function makeTestServer(options: { fetch?: FetchFn; git?: boolean; files?: Record<string, string>; versionDelayMs?: number; now?: () => number } = {}) {
+export async function makeTestServer(options: { fetch?: FetchFn; git?: boolean; files?: Record<string, string>; versionDelayMs?: number; now?: () => number; dropbox?: FetchFn } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'notesapp-test-'));
   for (const [rel, content] of Object.entries(options.files ?? {})) {
     await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
@@ -42,7 +43,8 @@ export async function makeTestServer(options: { fetch?: FetchFn; git?: boolean; 
   const papers = new PaperService({ store, index, notes, fetch: fetchFn });
   const settings = new SettingsStore(disk);
   await settings.migrate();
-  const app = createApp({ store, index, events, notes, settings, papers, vault, versions, git, fetch: fetchFn }, { port: 4321, allowedOrigins: [ORIGIN] });
+  const sync = new SyncService({ disk, notes, versions, events, fetch: options.dropbox ?? fetchFn });
+  const app = createApp({ store, index, events, notes, settings, papers, vault, versions, git, sync, fetch: fetchFn }, { port: 4321, allowedOrigins: [ORIGIN] });
   const received: ServerEvent[] = [];
   events.subscribe((e) => received.push(e));
 
@@ -62,6 +64,8 @@ export async function makeTestServer(options: { fetch?: FetchFn; git?: boolean; 
     papers,
     versions,
     git,
+    sync,
+    disk,
     app,
     received,
     get: (url: string) => request('GET', url),

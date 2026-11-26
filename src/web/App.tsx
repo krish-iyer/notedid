@@ -18,6 +18,7 @@ const BoardPage = lazy(() => import('./pages/BoardPage.tsx').then((m) => ({ defa
 const DashboardsPage = lazy(() => import('./pages/DashboardPage.tsx').then((m) => ({ default: m.DashboardsPage })));
 const DashboardPage = lazy(() => import('./pages/DashboardPage.tsx').then((m) => ({ default: m.DashboardPage })));
 const VaultPage = lazy(() => import('./pages/VaultPage.tsx').then((m) => ({ default: m.VaultPage })));
+const SyncPage = lazy(() => import('./pages/SyncPage.tsx').then((m) => ({ default: m.SyncPage })));
 
 function Screen({ route }: { route: Route }) {
   const today = useToday();
@@ -50,6 +51,8 @@ function Screen({ route }: { route: Route }) {
       return <DashboardPage key={route.path} path={route.path} />;
     case 'vault':
       return <VaultPage />;
+    case 'sync':
+      return <SyncPage />;
     default:
       return <NotFoundPage />;
   }

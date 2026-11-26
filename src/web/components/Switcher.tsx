@@ -2,6 +2,7 @@ import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import type { NoteSummary } from '../../shared/api.ts';
 import { fuzzyFilter, type FuzzyMatch } from '../../shared/fuzzy.ts';
 import { captureToToday, createBoard, createDashboard, createNote, exportNotes, giveNotesIds, importNotes } from '../actions.ts';
+import { syncNow } from '../sync.ts';
 import { navigate, noteHref } from '../router.ts';
 import { useNotes } from '../stores.ts';
 import { setTheme } from '../theme.ts';
@@ -34,6 +35,12 @@ const ARCHIVE: Item[] = [
   { kind: 'action', id: 'import-zip', icon: 'folder', label: 'Import notes from a .zip…', run: () => void importNotes('zip') },
 ];
 
+/** Syncing with Dropbox. */
+const SYNC: Item[] = [
+  { kind: 'action', id: 'sync-now', icon: 'sync', label: 'Sync now', run: () => void syncNow() },
+  { kind: 'action', id: 'sync-settings', icon: 'sync', label: 'Sync with Dropbox…', run: () => navigate('/sync') },
+];
+
 /** Ctrl+K: jump to any note, or turn what you typed into a note, a capture or a search. */
 export function Switcher({ onClose }: { onClose: () => void }) {
   const notes = useNotes();
@@ -54,6 +61,7 @@ export function Switcher({ onClose }: { onClose: () => void }) {
         { kind: 'action', id: 'theme-auto', icon: 'auto', label: 'Theme: follow the system', run: () => setTheme('auto') },
         { kind: 'action', id: 'note-ids', icon: 'check', label: 'Give every note an ID', run: () => void giveNotesIds() },
         ...ARCHIVE,
+        ...SYNC,
       ];
     }
     const found = fuzzyFilter(notes, q, noteLabel, 30).map(({ item, match }): Item => ({ kind: 'note', note: item, match }));
@@ -66,6 +74,7 @@ export function Switcher({ onClose }: { onClose: () => void }) {
         ]
       : [];
     if (/^(export|import|backup|zip)/i.test(q)) commands.push(...ARCHIVE);
+    if (/^(sync|dropbox)/i.test(q)) commands.push(...SYNC);
     if (/^(give|ids?\b|note ids?)/i.test(q)) commands.push({ kind: 'action', id: 'note-ids', icon: 'check', label: 'Give every note an ID', run: () => void giveNotesIds() });
     const exact = notes.some((n) => n.title.toLowerCase() === q.toLowerCase());
     const actions: Item[] = [

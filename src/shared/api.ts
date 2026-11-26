@@ -112,6 +112,23 @@ export interface HistoryEntry {
   date: string;
 }
 
+/** Syncing with Dropbox: whether it's set up, and how the last sync went. */
+export interface SyncStatus {
+  connected: boolean;
+  /** Whose Dropbox. */
+  account: { name: string; email: string } | null;
+  running: boolean;
+  /** When a sync last finished (ISO). */
+  lastSync: string | null;
+  lastError: string | null;
+  /** Notes changed on two devices in the same lines: one text stayed, the other is in the note's history. */
+  conflicts: { path: string; at: string }[];
+  /** What the last sync did. */
+  last: { up: number; down: number; deleted: number } | null;
+  /** The sync would delete this many files on Dropbox, and waits for a yes. */
+  confirmDeletes: number | null;
+}
+
 export interface HistoryResponse {
   /** The note's id, or null: a note without one has no versions. */
   id: string | null;

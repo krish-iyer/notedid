@@ -126,6 +126,36 @@ function diffTokens(a: string[], b: string[]): DiffPart[] | null {
   return merge(ops);
 }
 
+/**
+ * For each token of `a`, the index of the token of `b` it stays as in the shortest edit script, or
+ * -1 where it was removed. Null when the two differ in more than `maxEdits` tokens.
+ */
+export function matchTokens(a: readonly string[], b: readonly string[], maxEdits = 5000): Int32Array | null {
+  const matches = new Int32Array(a.length).fill(-1);
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) {
+    matches[start] = start;
+    start++;
+  }
+  let endA = a.length;
+  let endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+    endA--;
+    endB--;
+    matches[endA] = endB;
+  }
+  const ops = myers(a.slice(start, endA), b.slice(start, endB), maxEdits);
+  if (!ops) return null;
+  let x = start;
+  let y = start;
+  for (const op of ops) {
+    if (op.kind === 'same') matches[x++] = y++;
+    else if (op.kind === 'del') x++;
+    else y++;
+  }
+  return matches;
+}
+
 /** The differences from `before` to `after`. Joining the 'same' and 'add' parts gives `after`. */
 export function diffText(before: string, after: string): DiffPart[] {
   if (before === after) return before ? [{ kind: 'same', text: before }] : [];

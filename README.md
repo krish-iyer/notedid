@@ -35,7 +35,16 @@ make browser  # build it and serve it → http://localhost:4323
 
 Notes there are kept in that browser only, separately from the Docker version's folder. To bring notes in, use Ctrl+K → **Import notes from a folder…** (your notes folder) or **Import notes from a .zip…**. Ctrl+K → **Export all notes (.zip)** saves everything: notes, PDFs, the vault (still encrypted), settings and the notes' versions, as a backup or to move them. Import never replaces a note you already have. Both work in the Docker version too.
 
-Syncing between devices (through Dropbox) is the next step. Until then, a few things differ:
+### Sync between devices (Dropbox)
+
+Open **Sync** in the sidebar to sync your notes through your Dropbox, in the browser-only app or the Docker version. Setting it up takes a few minutes, once: you create a small Dropbox app (free) that can only see a folder of its own (Dropbox → Apps → the name you give it), paste its app key, allow it, and paste back the code Dropbox shows. Do the same on your other devices. Everything syncs: notes, versions, PDFs and files, settings, and the vault, which stays encrypted.
+
+- It syncs when the app opens, a few seconds after you change something, every minute while it is open, and when you come back to it.
+- A note changed on two devices is merged line by line. If both changed the same lines, the newer text stays and the other goes into the note's History (the Sync screen lists such notes).
+- A change wins over a deletion. If a sync would delete many files on Dropbox at once (because this browser lost its storage, say), it asks first, and can bring them back instead.
+- Disconnecting deletes nothing, here or on Dropbox.
+
+A few things differ in the browser-only app:
 
 - Adding an arXiv paper gets its details from DataCite, because arXiv's own service doesn't answer browser requests. The PDF still comes from arXiv.
 - A pasted link stays a plain URL: most websites don't let a browser app read their page titles.
@@ -131,7 +140,7 @@ Syncing between devices (through Dropbox) is the next step. Until then, a few th
 
 **Theme.** The **Auto / Light / Dark** switch is at the bottom of the sidebar, and Ctrl+K understands `theme dark` too. Auto follows the system setting. The choice is kept per browser.
 
-**History.** Every note keeps its earlier versions as plain markdown files in `.notedid/history/<note id>/`, one file per version, named after when the note had that text (`2026-11-26 14.05.33 UTC.md`). Any editor can open them, and they go along with an export (and, later, sync). Because the folder is named after the note's permanent ID, a renamed or moved note keeps its history; a note without an ID keeps none, and its History tab offers to give notes IDs. A version is kept about a minute after you stop typing (`HISTORY_DELAY_SECONDS` changes this) and at least every 3 minutes while you keep going. The text from before an edit is kept as well, if it isn't a version yet. Older versions thin out: everything from the last day stays, then the last version of each hour for a week, then the last of each day. Open a version in a note's History tab and the note itself shows what changed since then, like tracked changes: added text is highlighted green (new lines get a green bar) and removed text is shown struck through in red where it was. The removed text is only shown, not put back in the file. You can keep editing while comparing; press **Done** at the top of the note to stop. On a paper, History switches to the review note to show the changes. You can also view that version as it was, or restore it: the text it replaces is kept as a version first. Deleted notes go to `trash/`.
+**History.** Every note keeps its earlier versions as plain markdown files in `.notedid/history/<note id>/`, one file per version, named after when the note had that text (`2026-11-26 14.05.33 UTC.md`). Any editor can open them, and they go along with an export and sync. Because the folder is named after the note's permanent ID, a renamed or moved note keeps its history; a note without an ID keeps none, and its History tab offers to give notes IDs. A version is kept about a minute after you stop typing (`HISTORY_DELAY_SECONDS` changes this) and at least every 3 minutes while you keep going. The text from before an edit is kept as well, if it isn't a version yet. Older versions thin out: everything from the last day stays, then the last version of each hour for a week, then the last of each day. Open a version in a note's History tab and the note itself shows what changed since then, like tracked changes: added text is highlighted green (new lines get a green bar) and removed text is shown struck through in red where it was. The removed text is only shown, not put back in the file. You can keep editing while comparing; press **Done** at the top of the note to stop. On a paper, History switches to the review note to show the changes. You can also view that version as it was, or restore it: the text it replaces is kept as a version first. Deleted notes go to `trash/`.
 
 **Git backup.** The Docker version also keeps the whole folder (PDFs, data, the vault, settings) in its own git repository, committed a minute or so after changes stop, for `git log` and friends. It leaves `.notedid/history/` out, since git has those texts already.
 
@@ -147,6 +156,7 @@ trash/                        deleted notes
 vault/                        encrypted vault notes and key file
 .notedid/settings.json        pinned notes, saved views, vault lock time
 .notedid/history/<id>/        each note's earlier versions, one markdown file each
+.notedid/sync/                the Dropbox sign-in and sync state (never synced or exported)
 .git/                         the git backup (Docker version)
 ```
 
@@ -169,7 +179,7 @@ The ports can be changed with `WEB_PORT` (web client, default 4322) and `PORT` (
 | Path | What |
 |---|---|
 | `src/shared` | Markdown parsing (links, tags, tasks), search queries, boards, tables, dates; used by both sides |
-| `src/server` | HTTP API (Hono), file storage, search index (SQLite FTS5), version history, git backup, papers, vault storage. All of it but the Node parts (`nodeDisk.ts`, `nodeSqlite.ts`, git, the file watcher, `main.ts`) also runs in the browser-only app |
+| `src/server` | HTTP API (Hono), file storage, search index (SQLite FTS5), version history, Dropbox sync, git backup, papers, vault storage. All of it but the Node parts (`nodeDisk.ts`, `nodeSqlite.ts`, git, the file watcher, `main.ts`) also runs in the browser-only app |
 | `src/browser` | The browser-only app's backend: the service worker, notes in IndexedDB (`idbDisk.ts`), SQLite in WebAssembly |
 | `src/web` | React client: CodeMirror editor, screens, PDF viewer (PDF.js), vault crypto |
 | `docs/SPEC.md` | Design, milestones and build notes |

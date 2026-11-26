@@ -11,6 +11,7 @@ import type {
   SaveNoteResponse,
   SearchResponse,
   Settings,
+  SyncStatus,
   TagCount,
   TaskItem,
   VaultBlobInfo,
@@ -90,6 +91,10 @@ function form(fields: Record<string, string | Blob>): FormData {
 
 export const api = {
   notes: () => call<NoteSummary[]>('GET', '/api/notes'),
+  syncStatus: () => call<SyncStatus>('GET', '/api/sync'),
+  syncConnect: (appKey: string, code: string, verifier: string) => call<SyncStatus>('POST', '/api/sync/connect', { appKey, code, verifier }),
+  syncDisconnect: () => call<SyncStatus>('DELETE', '/api/sync/connect'),
+  syncRun: (deletes?: 'allow' | 'restore') => call<{ status: SyncStatus; more: boolean }>('POST', '/api/sync', deletes ? { deletes } : {}),
   tags: () => call<TagCount[]>('GET', '/api/tags'),
   createNote: (title: string, folder = 'notes') => call<{ path: string }>('POST', '/api/note/create', { title, folder }),
   createDashboard: (title: string) => call<{ path: string }>('POST', '/api/note/create', { title, kind: 'dashboard' }),

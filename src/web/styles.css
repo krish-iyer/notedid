@@ -4231,3 +4231,43 @@ button.tag-chip:hover:not(:disabled) {
 .cm-card.read-only:hover {
   box-shadow: none;
 }
+
+/* ---- Sync with Dropbox ---- */
+.badge.warn {
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+}
+.sync-page h2 {
+  margin-top: 1.6em;
+  font-size: 1.05rem;
+}
+.sync-steps li {
+  margin-bottom: 0.6em;
+}
+.sync-input {
+  display: block;
+  width: 100%;
+  max-width: 26rem;
+  margin-top: 0.4em;
+  font-family: var(--mono, ui-monospace, monospace);
+}
+.sync-code {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  align-items: center;
+}
+.sync-code .sync-input {
+  flex: 1 1 16rem;
+  margin-top: 0;
+}
+.sync-error,
+.sync-confirm {
+  padding: 0.6em 0.8em;
+  border-radius: 8px;
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+}
+.sync-conflicts {
+  padding-left: 1.2em;
+}

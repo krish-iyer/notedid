@@ -17,6 +17,7 @@ export type Route =
   | { name: 'dashboards' }
   | { name: 'dashboard'; path: string }
   | { name: 'vault' }
+  | { name: 'sync' }
   | { name: 'notfound' };
 
 export function encodeNotePath(path: string): string {
@@ -52,6 +53,7 @@ export function parseRoute(url: URL): Route {
     '/boards': { name: 'boards' },
     '/dashboards': { name: 'dashboards' },
     '/vault': { name: 'vault' },
+    '/sync': { name: 'sync' },
   };
   if (simple[p]) return simple[p];
   if (p === '/search') return { name: 'search', q: url.searchParams.get('q') ?? '' };

@@ -8,6 +8,7 @@ import { addDays, isISODate, localISODate } from '../shared/dates.ts';
 import { parseQuery } from '../shared/query.ts';
 import { slugify, tagify } from '../shared/slug.ts';
 import { exportZip, importZip } from './archive.ts';
+import { DropboxError } from './dropbox.ts';
 import type { EventHub } from './events.ts';
 import type { GitBackup } from './git.ts';
 import type { NoteIndex } from './noteIndex.ts';
@@ -16,6 +17,7 @@ import { NotFoundError, type NoteService } from './notes.ts';
 import { type PaperService, UpstreamError } from './papers.ts';
 import type { SettingsStore } from './settings.ts';
 import { ConflictError, DATA_EXTENSIONS, EncodingError, FILE_EXTENSIONS, type NoteStore, normalizeNotePath, normalizePath, PathError } from './storage.ts';
+import { NotConnected, type SyncService } from './sync.ts';
 import { VaultConflict, type VaultStore } from './vault.ts';
 import type { VersionHistory } from './versions.ts';
 import { type FetchFn, fetchPageTitle } from './web.ts';
@@ -44,6 +46,7 @@ export interface AppContext {
   versions: VersionHistory;
   /** A backup of the whole folder, where git is installed. */
   git: GitBackup | null;
+  sync: SyncService;
   fetch: FetchFn;
 }
 
@@ -300,6 +303,32 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     return c.json(result);
   });
 
+  // ---- Sync with Dropbox --------------------------------------------------------------------------
+
+  app.get('/api/sync', async (c) => c.json(await ctx.sync.status()));
+
+  app.post('/api/sync/connect', smallBody, async (c) => {
+    const body = await jsonBody<{ appKey: string; code: string; verifier: string; endpoints?: unknown }>(c, { appKey: 'string', code: 'string', verifier: 'string', endpoints: 'any' });
+    if (!/^[A-Za-z0-9]{5,64}$/.test(body.appKey.trim())) throw new BadRequest('That doesn’t look like a Dropbox app key');
+    if (!body.code.trim() || !/^[A-Za-z0-9_-]{43,128}$/.test(body.verifier)) throw new BadRequest('Expected the code Dropbox showed');
+    // Another Dropbox-like service (tests use a fake one).
+    let endpoints: { api: string; content: string } | undefined;
+    if (body.endpoints !== undefined) {
+      const e = body.endpoints as Record<string, unknown>;
+      if (typeof e?.api !== 'string' || typeof e.content !== 'string' || ![e.api, e.content].every((u) => /^https?:\/\/[^/]+$/.test(u as string))) throw new BadRequest('Expected endpoints as two origins');
+      endpoints = { api: e.api, content: e.content };
+    }
+    return c.json(await ctx.sync.connect(body.appKey.trim(), body.code, body.verifier, endpoints));
+  });
+
+  app.delete('/api/sync/connect', async (c) => c.json(await ctx.sync.disconnect()));
+
+  app.post('/api/sync', smallBody, async (c) => {
+    const body = await jsonBody<{ deletes?: string }>(c, { deletes: 'string?' });
+    const deletes = body.deletes === 'allow' || body.deletes === 'restore' ? body.deletes : 'ask';
+    return c.json(await ctx.sync.run({ deletes }));
+  });
+
   // ---- Papers ----------------------------------------------------------------------------------
 
   app.get('/api/papers', async (c) => c.json(await ctx.papers.list()));
@@ -370,7 +399,8 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     if (err instanceof PathError || err instanceof BadRequest) return c.json({ error: err.message } satisfies ErrorResponse, 400);
     if (err instanceof NotFoundError) return c.json({ error: err.message } satisfies ErrorResponse, 404);
     if (err instanceof EncodingError) return c.json({ error: err.message } satisfies ErrorResponse, 422);
-    if (err instanceof UpstreamError) return c.json({ error: err.message } satisfies ErrorResponse, 502);
+    if (err instanceof UpstreamError || err instanceof DropboxError) return c.json({ error: err.message } satisfies ErrorResponse, 502);
+    if (err instanceof NotConnected) return c.json({ error: err.message } satisfies ErrorResponse, 409);
     console.error(err);
     return c.json({ error: 'Something went wrong on the server' } satisfies ErrorResponse, 500);
   });

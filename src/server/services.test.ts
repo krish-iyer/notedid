@@ -128,7 +128,7 @@ describe('the git backup', () => {
     // Starting again doesn't add the exclusion twice.
     expect(await new GitBackup(nested).init()).toBe(true);
     const exclude = await fs.readFile(path.join(nested, '.git/info/exclude'), 'utf8');
-    expect(exclude.split('\n').filter((line) => line === '/.notedid/history/')).toHaveLength(1);
+    expect(exclude.split('\n').filter((line) => line.startsWith('/.notedid/'))).toEqual(['/.notedid/history/', '/.notedid/sync/']);
   });
 });
 

@@ -27,8 +27,8 @@ export interface BackupOptions {
   maxWaitMs?: number;
 }
 
-/** Files git leaves alone: the notes' versions are copies of the notes, which git has already. */
-const IGNORED = ['/.notedid/history/'];
+/** Files git leaves alone: the notes' versions (copies of the notes, which git has already) and the Dropbox sign-in and sync state. */
+const IGNORED = ['/.notedid/history/', '/.notedid/sync/'];
 
 /**
  * A backup of the whole notes folder in its own git repository, where git is installed (the

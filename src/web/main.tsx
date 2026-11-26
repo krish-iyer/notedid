@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { startServiceWorker } from './browserApp.ts';
+import { startSync } from './sync.ts';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -15,6 +16,7 @@ async function start(element: HTMLElement): Promise<void> {
       <App />
     </StrictMode>,
   );
+  startSync();
 }
 
 start(root).catch((err: unknown) => {

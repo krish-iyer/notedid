@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { createBoard, createNote, removeView } from '../actions.ts';
 import { Link, noteHref, type Route, useRoute } from '../router.ts';
 import { useNotes, useSettings, useTags } from '../stores.ts';
+import { useSyncStatus } from '../sync.ts';
 import { setTheme, useTheme } from '../theme.ts';
 import { Icon, type IconName } from './Icon.tsx';
 
@@ -9,14 +10,27 @@ function isCurrent(route: Route, name: Route['name'] | Route['name'][]): boolean
   return Array.isArray(name) ? name.includes(route.name) : route.name === name;
 }
 
-function NavItem({ to, icon, label, active, badge, onNavigate }: { to: string; icon: IconName; label: string; active: boolean; badge?: number; onNavigate: () => void }) {
+function NavItem({ to, icon, label, active, badge, warn, onNavigate }: { to: string; icon: IconName; label: string; active: boolean; badge?: number; warn?: string; onNavigate: () => void }) {
   return (
     <Link to={to} className={active ? 'nav-item active' : 'nav-item'} aria-current={active ? 'page' : undefined} onNavigate={onNavigate}>
       <Icon name={icon} />
       <span className="nav-label">{label}</span>
       {badge ? <span className="badge">{badge}</span> : null}
+      {warn ? (
+        <span className="badge warn" title={warn}>
+          !
+        </span>
+      ) : null}
     </Link>
   );
+}
+
+/** What the sync item says needs a look, if anything. */
+function syncWarning(status: ReturnType<typeof useSyncStatus>): string | undefined {
+  if (!status?.connected) return undefined;
+  if (status.confirmDeletes !== null) return 'Sync waits for you: files were deleted here';
+  if (status.lastError) return `Sync failed: ${status.lastError}`;
+  return undefined;
 }
 
 export function Sidebar({ open, onClose, onOpenSwitcher }: { open: boolean; onClose: () => void; onOpenSwitcher: () => void }) {
@@ -26,6 +40,7 @@ export function Sidebar({ open, onClose, onOpenSwitcher }: { open: boolean; onCl
   const tags = useTags();
   const [showAllTags, setShowAllTags] = useState(false);
   const theme = useTheme();
+  const sync = useSyncStatus();
 
   const openTasks = useMemo(() => notes.reduce((sum, n) => sum + n.openTasks, 0), [notes]);
   const pinned = useMemo(() => (settings?.pinned ?? []).map((p) => notes.find((n) => n.path === p)).filter((n) => n !== undefined), [settings, notes]);
@@ -62,6 +77,7 @@ export function Sidebar({ open, onClose, onOpenSwitcher }: { open: boolean; onCl
           <NavItem to="/boards" icon="board" label="Boards" active={isCurrent(route, ['boards', 'board'])} onNavigate={close} />
           <NavItem to="/dashboards" icon="dashboard" label="Dashboards" active={isCurrent(route, ['dashboards', 'dashboard'])} onNavigate={close} />
           <NavItem to="/vault" icon="vault" label="Vault" active={isCurrent(route, 'vault')} onNavigate={close} />
+          <NavItem to="/sync" icon="sync" label={sync?.connected ? 'Sync' : 'Sync…'} active={isCurrent(route, 'sync')} warn={syncWarning(sync)} onNavigate={close} />
         </div>
 
         {pinned.length > 0 && (

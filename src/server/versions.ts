@@ -1,6 +1,6 @@
 import type { HistoryEntry, HistoryResponse } from '../shared/api.ts';
 import { noteIdOf } from '../shared/noteIds.ts';
-import type { NoteStore } from './storage.ts';
+import { hashContent, type NoteStore } from './storage.ts';
 
 /**
  * A note's history as plain files. Every so often the note's text is kept as a version: a file of
@@ -200,6 +200,11 @@ export class VersionHistory {
     if (id === null) return null;
     const kept = await this.#store.readText(`${HISTORY_FOLDER}/${id}/${version}.md`);
     return kept.hash === null ? null : kept.content;
+  }
+
+  /** Keeps `content` as a version of note `id` from `at` (the text that lost a sync conflict, say). */
+  async keepText(id: string, content: string, at: number): Promise<void> {
+    await this.#serially(() => this.#keep({ id, content, hash: hashContent(content), mtime: at }));
   }
 
   /** Forgets what it knows of the history folders (after versions came in from elsewhere: an import, a sync). */

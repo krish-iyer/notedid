@@ -14,6 +14,18 @@ const K = Uint32Array.from([
 const encoder = new TextEncoder();
 
 export function sha256Hex(data: string | Uint8Array): string {
+  return Array.from(digest(data), (x) => x.toString(16).padStart(8, '0')).join('');
+}
+
+/** SHA-256 as 32 bytes. */
+export function sha256Bytes(data: string | Uint8Array): Uint8Array {
+  const out = new Uint8Array(32);
+  const view = new DataView(out.buffer);
+  digest(data).forEach((x, i) => view.setUint32(i * 4, x));
+  return out;
+}
+
+function digest(data: string | Uint8Array): Uint32Array {
   const bytes = typeof data === 'string' ? encoder.encode(data) : data;
   // Padding: a 1 bit, zeros, then the length in bits as a 64-bit big-endian number.
   const length = Math.ceil((bytes.length + 9) / 64) * 64;
@@ -63,5 +75,5 @@ export function sha256Hex(data: string | Uint8Array): string {
     h[6] = (h[6] as number) + g;
     h[7] = (h[7] as number) + hh;
   }
-  return Array.from(h, (x) => x.toString(16).padStart(8, '0')).join('');
+  return h;
 }
