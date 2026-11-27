@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">notedid</string>
+    <string name="title_activity_main">notedid</string>
+    <string name="package_name">app.notedid.notes</string>
+    <string name="custom_url_scheme">app.notedid.notes</string>
+</resources>

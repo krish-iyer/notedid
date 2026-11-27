@@ -4,6 +4,7 @@
 #   make browser  build the browser-only app and serve it at http://localhost:4323 (notes stay in the browser)
 #   make browser-dist  build the browser-only app into dist/browser, to host anywhere (BASE_PATH=/folder/ for a folder)
 #   make lan      serve the browser-only app on your network over HTTPS, for your phone (make lan-stop stops it)
+#   make apk      build the Android app into dist/notedid.apk
 #   make start    start the app in the background; `make logs` follows its output
 #   make down     stop and remove the app container
 #   make check    type-check, run the tests and build
@@ -20,7 +21,7 @@ RUN := $(COMPOSE) run --rm dev
 DEPS := node_modules/.package-lock.json
 SETUP := .env $(NOTES_HOST_DIR)
 
-.PHONY: dev start logs check test typecheck build browser browser-dist lan lan-stop shell down image
+.PHONY: dev start logs check test typecheck build browser browser-dist lan lan-stop apk shell down image
 
 dev: $(DEPS) | $(SETUP)
 	$(COMPOSE) up dev
@@ -80,6 +81,12 @@ lan: $(DEPS) | $(SETUP)
 
 lan-stop:
 	-docker rm -f notedid-lan
+
+# The Android app: the browser-only app inside Android's WebView (Capacitor), signed with a key made
+# the first time in .apk-signing/ (keep a copy). make lan offers it for download too.
+apk: $(DEPS) | $(SETUP)
+	$(COMPOSE) --profile android run --rm android sh scripts/build-apk.sh
+	@test ! -d .lan/public || { cp dist/notedid.apk .lan/public/notedid.apk && echo "make lan's page offers it now too."; }
 
 shell: | $(SETUP)
 	$(RUN) bash

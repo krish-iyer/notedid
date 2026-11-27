@@ -1,0 +1,8 @@
+{
+  "appId": "app.notedid.notes",
+  "appName": "notedid",
+  "webDir": "dist/app",
+  "android": {
+    "allowMixedContent": false
+  }
+}

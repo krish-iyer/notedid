@@ -62,6 +62,15 @@ cp .lan/ca.crt .lan/public/notedid-ca.crt
 links="<a href=\"https://$ip:$port/\">https://$ip:$port/</a>"
 [ -n "$name" ] && links="<a href=\"https://$name:$port/\">https://$name:$port/</a> (or $links)"
 for a in ${addresses#"$ip"}; do links="$links, or through your VPN <a href=\"https://$a:$port/\">https://$a:$port/</a>"; done
+# The Android app, if one was built (make apk): it needs no certificate.
+android=""
+if [ -s dist/notedid.apk ]; then
+  cp dist/notedid.apk .lan/public/notedid.apk
+  apk_sum=$(sha256sum dist/notedid.apk | cut -d' ' -f1)
+  android="<h2>On Android: the app</h2>
+<p><a href=\"/notedid.apk\">Download notedid for Android</a> ($(du -h dist/notedid.apk | cut -f1)), open the downloaded file, and allow installing it when Android asks. It needs no certificate, and updates install over it the same way. Its SHA-256 is <code style=\"word-break: break-all\">$apk_sum</code>.</p>
+<h2>On iPhone (or Android, in the browser)</h2>"
+fi
 cat > .lan/public/index.html << HTML
 <!doctype html>
 <html lang="en">
@@ -70,6 +79,7 @@ cat > .lan/public/index.html << HTML
 <title>notedid on your network</title>
 <body style="font: 16px/1.5 system-ui, sans-serif; max-width: 36rem; margin: 2rem auto; padding: 0 1rem">
 <h1>notedid on your network</h1>
+$android
 <p>Two steps, once per phone.</p>
 <ol>
   <li>

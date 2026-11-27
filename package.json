@@ -21,6 +21,9 @@
     "check": "npm run typecheck && npm test && npm run build && npm run build:browser"
   },
   "dependencies": {
+    "@capacitor/android": "8.6.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.3",
     "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-markdown": "^6.5.2",
@@ -45,6 +48,7 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.6.3",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

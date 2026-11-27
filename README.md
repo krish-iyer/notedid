@@ -58,6 +58,8 @@ The browser-only app installs like an app, on phones and computers, and works of
 
 Then open the address on the phone and install it: on an iPhone or iPad, Safari's **Share → Add to Home Screen**; on Android, Chrome's menu → **Install app** (or **Add to home screen**). Open **Sync** there and connect it with the same Dropbox app key: the first sync brings all your notes. The host only serves the app; your notes stay on your devices and in your Dropbox.
 
+**The Android app.** `make apk` builds `dist/notedid.apk`: the same app inside Android's WebView (Capacitor), with its files in the APK, so it needs no host and no certificate. `make lan`'s page offers it for download, or copy the file to the phone any way you like; open it there and allow installing it. A newer APK installs over the old one and keeps its notes, as long as it's signed with the same key: the first `make apk` makes one in `.apk-signing/` (gitignored), so keep a copy of that folder. The app keeps its notes to itself (Android's cloud backup is off for it); sync them with Dropbox. In the app, saving a file (Export all notes, Export .bib) doesn't work yet: use sync, or the browser version.
+
 **Browsers.** Chrome, Edge, Safari and Firefox (the current one and ESR 140) all run it. In Firefox:
 
 - It runs in a tab (desktop Firefox doesn't install web apps); on Android, Firefox's menu → **Add app to Home screen** installs it.

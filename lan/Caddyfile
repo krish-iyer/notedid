@@ -28,6 +28,10 @@ http://:8080 {
 		header Content-Type application/x-x509-ca-cert
 		file_server
 	}
+	handle /notedid.apk {
+		header Content-Type application/vnd.android.package-archive
+		file_server
+	}
 	handle {
 		rewrite * /index.html
 		file_server

@@ -28,5 +28,20 @@ services:
         target: /notes
       - npm-cache:/cache/npm
 
+  # Builds the Android app: `make apk`. Same as dev, plus Java and the Android SDK.
+  android:
+    build:
+      context: .
+      target: android
+    image: notedid-android
+    init: true
+    user: "${HOST_UID:?run make first, it creates .env}:${HOST_GID:?run make first, it creates .env}"
+    volumes:
+      - .:/app
+      - npm-cache:/cache/npm
+      - gradle-cache:/cache/gradle
+    profiles: [android]
+
 volumes:
   npm-cache:
+  gradle-cache:
