@@ -42,6 +42,21 @@ services:
       - gradle-cache:/cache/gradle
     profiles: [android]
 
+  # Builds the desktop app: `make desktop`. Same as dev, plus what Electron needs to run and to be packaged.
+  desktop:
+    build:
+      context: .
+      target: desktop
+    image: notedid-desktop
+    init: true
+    user: "${HOST_UID:?run make first, it creates .env}:${HOST_GID:?run make first, it creates .env}"
+    volumes:
+      - .:/app
+      - npm-cache:/cache/npm
+      - electron-cache:/cache/electron
+    profiles: [desktop]
+
 volumes:
   npm-cache:
   gradle-cache:
+  electron-cache:

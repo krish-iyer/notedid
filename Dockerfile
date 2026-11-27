@@ -41,3 +41,22 @@ RUN printf '#!/bin/sh\ngrep -q "^[^:]*:[^:]*:$(id -u):" /etc/passwd || echo "bui
  && chmod 755 /usr/local/bin/with-user \
  && chmod a+w /etc/passwd
 ENTRYPOINT ["/usr/local/bin/with-user"]
+
+# Building the desktop app (make desktop), and trying it on a virtual screen (Xvfb, xdotool): the
+# libraries Electron needs, on top of the dev image, and Wine, in which the Windows installer's build
+# runs a 32-bit Windows program. Electron and the packaging tools cache their downloads in
+# /cache/electron (a volume).
+FROM dev AS desktop
+RUN dpkg --add-architecture i386 \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends libgtk-3-0t64 libnss3 libgbm1 libasound2t64 libxss1 libxtst6 libatk-bridge2.0-0t64 \
+      libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libcups2t64 libsecret-1-0 xvfb xauth xdotool fonts-dejavu-core binutils xz-utils \
+      wine wine64 wine32:i386 \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p /cache/electron \
+ && chmod 1777 /cache/electron
+# Wine keeps its settings in a folder of the user the container runs as (scripts/build-desktop.sh makes it).
+ENV ELECTRON_CACHE=/cache/electron/electron \
+    ELECTRON_BUILDER_CACHE=/cache/electron/builder \
+    WINEPREFIX=/cache/electron/wine \
+    WINEDEBUG=-all

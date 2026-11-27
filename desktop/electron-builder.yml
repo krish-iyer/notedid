@@ -1,0 +1,47 @@
+# Packages the desktop app (make desktop; scripts/build-desktop.sh builds dist/desktop-app first).
+appId: app.notedid.notes
+productName: notedid
+directories:
+  app: dist/desktop-app
+  output: dist/desktop
+  buildResources: desktop
+# Everything the app needs is in its own folder (main.js holds the packages it uses): no packages to
+# rebuild, and none to add from the project's node_modules.
+npmRebuild: false
+asar: true
+files:
+  - "**/*"
+  - "!node_modules/**"
+# No updating itself: a newer version installs over the one you have.
+publish: null
+
+linux:
+  target: [AppImage, deb]
+  executableName: notedid
+  # The window goes with notedid.desktop (its icon in the dock), by the name in the app's package.json.
+  syncDesktopName: true
+  icon: dist/desktop-app/icon.png
+  category: Office
+  synopsis: Personal notes as plain markdown files
+  artifactName: notedid-${version}-${arch}.${ext}
+deb:
+  maintainer: notedid <notes@localhost>
+
+win:
+  target: [nsis]
+  icon: dist/desktop-app/icon.png
+  artifactName: notedid-setup-${version}.${ext}
+nsis:
+  # Installs for you alone, without asking for an administrator.
+  oneClick: true
+  perMachine: false
+
+mac:
+  target:
+    - target: zip
+      arch: [arm64, x64]
+  icon: dist/desktop-app/icon.png
+  category: public.app-category.productivity
+  artifactName: notedid-${version}-mac-${arch}.${ext}
+  # Not signed (README.md): a Mac doesn't open it as it is.
+  identity: null

@@ -1,8 +1,8 @@
 # notedid
 
-notedid is a personal notes app: plain markdown files, quick capture, fast search, papers with PDF highlights, project boards, and an encrypted vault. Your notes are ordinary files in a folder you choose. It runs with a small server in Docker, or entirely in a browser.
+notedid is a personal notes app: plain markdown files, quick capture, fast search, papers with PDF highlights, project boards, and an encrypted vault. Your notes are ordinary files in a folder you choose. It runs with a small server in Docker, as a desktop app, or entirely in a browser.
 
-[docs/SPEC.md](docs/SPEC.md) has the design and the milestones. Milestones 1–5 are built, and the app also runs without a server, syncs through Dropbox and installs on phones. AI features are postponed.
+[docs/SPEC.md](docs/SPEC.md) has the design and the milestones. Milestones 1–5 are built, and the app also runs without a server, syncs through Dropbox, installs on phones and runs as a desktop app. AI features are postponed.
 
 ## Run it
 
@@ -34,6 +34,23 @@ make browser  # build it and serve it → http://localhost:4323
 ```
 
 Notes there are kept in that browser only, separately from the Docker version's folder. To bring notes in, use Ctrl+K → **Import notes from a folder…** (your notes folder) or **Import notes from a .zip…**. Ctrl+K → **Export all notes (.zip)** saves everything: notes, PDFs, the vault (still encrypted), settings and the notes' versions, as a backup or to move them. Import never replaces a note you already have. Both work in the Docker version too.
+
+### On a computer: the desktop app
+
+The desktop app is notedid in a window of its own, on Linux and Windows, without Docker or a browser. It keeps your notes as markdown files in a folder you choose, like the Docker version: other apps can open and change them, and changes made there show up in the app.
+
+```sh
+make desktop  # build it → dist/desktop/
+```
+
+- **Linux:** install the .deb (`sudo apt install ./dist/desktop/notedid-<version>-amd64.deb`), or run the AppImage as it is (`chmod +x` it first; it needs `libfuse2`).
+- **Windows:** run `notedid-setup-<version>.exe`. It installs for your user alone, without asking for an administrator. Windows warns about an app from an unknown publisher, because it isn't signed: **More info → Run anyway**.
+
+The first time it starts, it asks where to keep your notes (Documents/notedid, or a folder you choose, such as one you already keep markdown notes in). **File → Open Notes Folder…** switches to another folder, and **File → Show Notes Folder** opens it in your file manager. Sync with Dropbox works as in the other versions. Where git is installed, the folder gets a git backup too, as with the Docker version: so open a folder in one of them at a time.
+
+It opens no network port: the window asks the app itself for its pages and notes. Links to the web open in your browser, and links to PDFs and pictures in your notes in the computer's own app for them.
+
+**macOS:** `make desktop DESKTOP=--mac` builds zips for Apple Silicon and Intel Macs, but they aren't signed, and a Mac doesn't open an unsigned app as it is.
 
 ### Sync between devices (Dropbox)
 
@@ -208,6 +225,7 @@ The ports can be changed with `WEB_PORT` (web client, default 4322) and `PORT` (
 | `src/shared` | Markdown parsing (links, tags, tasks), search queries, boards, tables, dates; used by both sides |
 | `src/server` | HTTP API (Hono), file storage, search index (SQLite FTS5), version history, Dropbox sync, git backup, papers, vault storage. All of it but the Node parts (`nodeDisk.ts`, `nodeSqlite.ts`, git, the file watcher, `main.ts`) also runs in the browser-only app |
 | `src/browser` | The browser-only app's backend: the service worker, notes in IndexedDB (`idbDisk.ts`), SQLite in WebAssembly |
+| `src/desktop` | The desktop app's main process (Electron): the backend over a folder on the computer, and the `notedid://` scheme its window loads; `desktop/` has its packaging |
 | `src/web` | React client: CodeMirror editor, screens, PDF viewer (PDF.js), vault crypto |
 | `docs/SPEC.md` | Design, milestones and build notes |
 | `Dockerfile`, `compose.yaml`, `Makefile` | The Docker development setup |
