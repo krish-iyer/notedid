@@ -52,6 +52,20 @@ describe('the example notes', () => {
     expect(s.index.get(EXAMPLES_START)?.title).toBe('Examples: start here');
   });
 
+  it('has a whiteboard: Excalidraw’s own file, in the index with its frames, its links counted', async () => {
+    const { s } = await withExamples();
+    const raw = await s.read('whiteboards/Example whiteboard.excalidraw');
+    expect(raw.startsWith('{')).toBe(true);
+    expect(JSON.parse(raw)).toMatchObject({ type: 'excalidraw', version: 2 });
+    const board = s.index.get('whiteboards/Example whiteboard.excalidraw');
+    expect(board).toMatchObject({ kind: 'whiteboard', title: 'Example whiteboard' });
+    expect(s.index.resolve('Example whiteboard')).toBe('whiteboards/Example whiteboard.excalidraw');
+    const toTasks = s.index.backlinks('notes/examples/tasks-and-dates.md').linked.map((l) => l.path);
+    expect(toTasks).toContain('whiteboards/Example whiteboard.excalidraw');
+    const toBoard = s.index.backlinks('whiteboards/Example whiteboard.excalidraw').linked.map((l) => l.path);
+    expect(toBoard).toEqual(expect.arrayContaining([EXAMPLES_START, 'dashboards/example-dashboard.md']));
+  });
+
   it('has tasks overdue, due today, coming up, without a date and done', async () => {
     const { s } = await withExamples();
     const tasks = (await (await s.get(`/api/tasks?today=${TODAY}`)).json()) as TaskItem[];
@@ -82,7 +96,7 @@ describe('the example notes', () => {
     expect(s.index.get('notes/examples/tasks-and-dates.md')?.tags).toContain('example-project');
 
     const dashboard = parseBoard(await s.read('dashboards/example-dashboard.md'));
-    expect(dashboard.clusters.map((c) => c.title)).toEqual(['Reading', 'Project', 'How it works']);
+    expect(dashboard.clusters.map((c) => c.title)).toEqual(['Reading', 'Project', 'Design', 'How it works']);
     expect(dashboard.clusters[0]?.entries.flatMap((e) => (e.type === 'card' ? [e.card.attrs] : []))).toEqual([['full'], ['half'], ['half']]);
 
     const sets = findCards((await s.read('notes/examples/cards.md')).split('\n'));

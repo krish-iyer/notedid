@@ -2,6 +2,7 @@ import { appendComment, newCommentsNote } from '../shared/comments.ts';
 import { addDays, type ISODate } from '../shared/dates.ts';
 import { EXAMPLES_START } from '../shared/examples.ts';
 import { newNoteId, withNoteId } from '../shared/noteIds.ts';
+import { isWhiteboardPath } from '../shared/whiteboards.ts';
 import { NoteService } from './notes.ts';
 import { extname } from './posixPath.ts';
 import type { NoteStore } from './storage.ts';
@@ -73,6 +74,80 @@ const DIAGRAM = `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="120
 `;
 
 /** The example files, with dates around `today`. */
+/** An example whiteboard, as Excalidraw saves one: two frames, a small diagram, and links to notes. */
+export const EXAMPLE_WHITEBOARD = 'whiteboards/Example whiteboard.excalidraw';
+
+function exampleWhiteboard(): string {
+  let n = 0;
+  const element = (type: string, x: number, y: number, width: number, height: number, extra: Record<string, unknown> = {}) => {
+    n++;
+    return {
+      id: `example-${n}`,
+      type,
+      x,
+      y,
+      width,
+      height,
+      angle: 0,
+      strokeColor: '#1e1e1e',
+      backgroundColor: 'transparent',
+      fillStyle: 'solid',
+      strokeWidth: 2,
+      strokeStyle: 'solid',
+      roughness: 1,
+      opacity: 100,
+      groupIds: [],
+      frameId: null,
+      roundness: type === 'rectangle' ? { type: 3 } : null,
+      seed: 1000 + n,
+      version: 1,
+      versionNonce: 2000 + n,
+      isDeleted: false,
+      boundElements: null,
+      updated: 1,
+      link: null,
+      locked: false,
+      index: `a${n.toString(36)}`,
+      ...extra,
+    };
+  };
+  const text = (x: number, y: number, value: string, frameId: string, size = 20) => {
+    const lines = value.split('\n');
+    return element('text', x, y, Math.max(...lines.map((l) => l.length)) * size * 0.55, lines.length * size * 1.25, {
+      frameId,
+      text: value,
+      originalText: value,
+      fontSize: size,
+      fontFamily: 5,
+      textAlign: 'left',
+      verticalAlign: 'top',
+      containerId: null,
+      autoResize: true,
+      lineHeight: 1.25,
+    });
+  };
+  const arrow = (x: number, y: number, dx: number, frameId: string) =>
+    element('arrow', x, y, dx, 0, { frameId, points: [[0, 0], [dx, 0]], startBinding: null, endBinding: null, startArrowhead: null, endArrowhead: 'arrow', elbowed: false });
+  const architecture = element('frame', 0, 0, 780, 300, { name: 'Architecture' });
+  const ideas = element('frame', 0, 360, 780, 260, { name: 'Ideas' });
+  const box = (x: number, label: string) => [element('rectangle', x, 110, 190, 80, { frameId: architecture.id, backgroundColor: '#e7f5ff' }), text(x + 22, 136, label, architecture.id)];
+  const elements = [
+    architecture,
+    text(30, 30, 'How notedid keeps your notes', architecture.id, 28),
+    ...box(30, 'The editor'),
+    arrow(225, 150, 70, architecture.id),
+    ...box(300, 'The index'),
+    arrow(495, 150, 70, architecture.id),
+    ...box(570, 'Your folder'),
+    text(30, 225, 'Notes are markdown files in a folder you choose; the index finds them.', architecture.id, 16),
+    ideas,
+    element('rectangle', 30, 400, 330, 180, { frameId: ideas.id, backgroundColor: '#fff3bf', link: '[[Example · Writing and linking]]' }),
+    text(50, 420, 'A shape can link to a note:\nselect this one, and open\nits link (the link icon).', ideas.id),
+    text(400, 410, 'Text on a whiteboard is\nsearchable, and a link like\n[[Example · Tasks and dates]]\ncounts as one. #example', ideas.id),
+  ];
+  return `${JSON.stringify({ type: 'excalidraw', version: 2, source: 'notedid', elements, appState: { viewBackgroundColor: '#ffffff', gridSize: 20 }, files: {} }, null, 2)}\n`;
+}
+
 export function exampleFiles(today: ISODate): ExampleFile[] {
   const day = (n: number) => addDays(today, n);
   const note = (path: string, content: string): ExampleFile => ({ path, content });
@@ -95,6 +170,7 @@ These notes show what notedid does, one thing each. They're ordinary notes: chan
 8. [[Example dashboard]]: a paper, notes and a board side by side, in tabs
 9. [[Example · Reading view and comments]]: commenting on a note
 10. [[Example · History, sync and safety]]: versions, Dropbox sync, backups and the vault
+11. [[Example whiteboard]]: drawings and diagrams, made with Excalidraw. A link can open one of its frames: [[Example whiteboard#Architecture]]
 
 **Today**, at the top of the sidebar, is your journal: one note per day, and the page the app opens on. Type anything there. From anywhere, **Ctrl+K** then **Alt+Enter** adds what you typed to it.
 `,
@@ -388,6 +464,10 @@ type: dashboard
 - [[Example · Tasks and dates]] {half}
 - [[Example · Cards]] {half}
 
+## Design
+
+- [[Example whiteboard#Architecture]]
+
 ## How it works
 
 - [[Examples: start here]] {half}
@@ -444,6 +524,7 @@ The **Vault** keeps notes encrypted with a passphrase you choose. They're encryp
 `,
     ),
     { path: 'files/examples/diagram.svg', content: DIAGRAM },
+    { path: EXAMPLE_WHITEBOARD, content: exampleWhiteboard() },
   ];
 }
 
@@ -461,7 +542,9 @@ export async function addExamples(store: NoteStore, notes: NoteService, today: I
       kept.push(file.path);
       continue;
     }
-    if (typeof file.content === 'string' && NoteService.indexable(file.path)) await notes.save(file.path, withNoteId(file.content, newNoteId()), null);
+    // Notes get an id; a whiteboard is Excalidraw's file, which has no place for one.
+    if (typeof file.content === 'string' && isWhiteboardPath(file.path)) await notes.save(file.path, file.content, null);
+    else if (typeof file.content === 'string' && NoteService.indexable(file.path)) await notes.save(file.path, withNoteId(file.content, newNoteId()), null);
     else await store.createBytes(file.path, typeof file.content === 'string' ? new TextEncoder().encode(file.content) : file.content);
     added.push(file.path);
   }
