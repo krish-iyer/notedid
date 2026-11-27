@@ -6,7 +6,7 @@ import { fetchNote, SaveConflict, saveNote } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
 import { openLink } from '../editor/links.ts';
 import { renderWithCards } from '../editor/cardView.ts';
-import { useLiveData } from '../hooks.ts';
+import { PHONE, useLiveData, useMediaQuery } from '../hooks.ts';
 import { encodeNotePath, Link, noteHref } from '../router.ts';
 import { useNote } from '../stores.ts';
 import { showToast } from '../toast.ts';
@@ -64,7 +64,9 @@ export function ReadPage({ path }: { path: string }) {
   const { data: commentsDoc, reload } = useLiveData(() => fetchNote(commentsPath), [commentsPath]);
   const comments: DocComment[] = useMemo(() => parseComments(commentsDoc?.content ?? ''), [commentsDoc]);
   const article = useRef<HTMLElement>(null);
-  const [pending, setPending] = useState<{ quote: string; x: number; y: number } | null>(null);
+  const popover = useRef<HTMLDivElement>(null);
+  const sheet = useMediaQuery(PHONE);
+  const [pending, setPending] = useState<{ quote: string; x: number; below: number; above: number } | null>(null);
   const [draft, setDraft] = useState('');
   const [writing, setWriting] = useState(false);
   const [active, setActive] = useState<number | null>(null);
@@ -78,8 +80,8 @@ export function ReadPage({ path }: { path: string }) {
     comments.forEach((c, i) => markQuote(el, c.quote, i));
   }, [doc, path, comments]);
 
-  /** The passage selected in the note, and where to put the comment button for it; null if none. */
-  const selected = useCallback((): { quote: string; x: number; y: number } | null => {
+  /** The passage selected in the note, and where it is in the note; null if none. */
+  const selected = useCallback((): { quote: string; x: number; below: number; above: number } | null => {
     const selection = window.getSelection();
     const el = article.current;
     if (!el || !selection || selection.isCollapsed || selection.rangeCount === 0 || !el.contains(selection.anchorNode)) return null;
@@ -87,9 +89,27 @@ export function ReadPage({ path }: { path: string }) {
     if (!quote) return null;
     const box = selection.getRangeAt(0).getBoundingClientRect();
     const host = el.getBoundingClientRect();
-    // Below the selection: a phone shows its own Copy menu above it.
-    return { quote, x: Math.min(Math.max(0, box.left - host.left), Math.max(0, host.width - 240)), y: box.bottom - host.top + 8 };
+    return { quote, x: box.left - host.left, below: box.bottom - host.top + 8, above: box.top - host.top - 8 };
   }, []);
+
+  // The comment button and box go below the selection (a phone shows its own Copy menu above it), or above it when
+  // the window has no room below, and never past the note's edges. On a phone they are sheets instead, placed by
+  // the CSS: the button at the bottom of the screen, the comment box at the top, where the keyboard can't cover it.
+  useLayoutEffect(() => {
+    const pop = popover.current;
+    const wrap = pop?.parentElement;
+    if (!pop || !wrap || !pending) return;
+    if (sheet) {
+      pop.style.left = '';
+      pop.style.top = '';
+      return;
+    }
+    pop.style.left = `${Math.max(0, Math.min(pending.x, wrap.clientWidth - pop.offsetWidth))}px`;
+    const top = wrap.getBoundingClientRect().top;
+    const fitsBelow = top + pending.below + pop.offsetHeight <= window.innerHeight - 8;
+    const fitsAbove = top + pending.above - pop.offsetHeight >= 8;
+    pop.style.top = `${!fitsBelow && fitsAbove ? pending.above - pop.offsetHeight : pending.below}px`;
+  }, [pending, writing, sheet]);
 
   const onMouseUp = () => {
     const next = selected();
@@ -191,7 +211,7 @@ export function ReadPage({ path }: { path: string }) {
         <div className="read-wrap">
           <article ref={article} className="rendered" onMouseUp={onMouseUp} onClick={onClick} />
           {pending && (
-            <div className="comment-popover" style={{ left: Math.max(0, pending.x), top: pending.y }}>
+            <div ref={popover} className={`comment-popover${sheet ? ' sheet' : ''}${writing ? ' writing' : ''}`}>
               {!writing ? (
                 <button type="button" className="primary" onMouseDown={(e) => e.preventDefault()} onClick={() => setWriting(true)}>
                   <Icon name="comment" size={16} /> Comment

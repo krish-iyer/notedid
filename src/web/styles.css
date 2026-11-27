@@ -4341,3 +4341,32 @@ button.tag-chip:hover:not(:disabled) {
     display: none;
   }
 }
+
+/* ---- Phone width: the menu for a selection, and the comment box, along the screen's edges ---- */
+/* The Highlight and Comment buttons: at the bottom, clear of the phone's own Copy menu by the selection. */
+.pdf-popover.sheet,
+.comment-popover.sheet {
+  position: fixed;
+  z-index: 37;
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: auto;
+  max-width: calc(100vw - 16px);
+}
+
+/* The comment box: at the top, where the keyboard can't cover it. */
+.pdf-popover.sheet.writing,
+.comment-popover.sheet.writing {
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  bottom: auto;
+  left: 8px;
+  right: 8px;
+  transform: none;
+  width: auto;
+  max-width: none;
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

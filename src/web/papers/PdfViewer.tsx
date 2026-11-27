@@ -3,9 +3,10 @@
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
-import { type CSSProperties, forwardRef, type MouseEvent, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, forwardRef, type MouseEvent, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Highlight } from '../../shared/api.ts';
 import { Icon } from '../components/Icon.tsx';
+import { PHONE, useMediaQuery } from '../hooks.ts';
 import { messageOf } from '../util.ts';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -28,6 +29,14 @@ export interface PdfAnnotation {
   text: string;
   date: string | null;
   rect: Rect;
+}
+
+/** Selected text, and where it is in the scrolling PDF: its left edge, and the tops for a menu below and above it. */
+interface Offer {
+  selection: PdfSelection;
+  x: number;
+  below: number;
+  above: number;
 }
 
 export interface PdfViewerHandle {
@@ -203,7 +212,9 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
   const widthRef = useRef(0);
   const [zoom, setZoom] = useState<number | 'fit'>('fit');
   const [page, setPage] = useState(1);
-  const [pending, setPending] = useState<{ selection: PdfSelection; x: number; y: number } | null>(null);
+  const [pending, setPending] = useState<Offer | null>(null);
+  const popover = useRef<HTMLDivElement>(null);
+  const sheet = useMediaQuery(PHONE);
   const [writing, setWriting] = useState(false);
   const writingRef = useRef(false);
   writingRef.current = writing;
@@ -344,8 +355,8 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
     setPage(current);
   };
 
-  /** The text selected in the PDF, to highlight or comment on, and where to put the menu for it; null if none. */
-  const selected = useCallback((): { selection: PdfSelection; x: number; y: number } | null => {
+  /** The text selected in the PDF, to highlight or comment on, and where it is; null if none. */
+  const selected = useCallback((): Offer | null => {
     const el = scroller.current;
     const selection = window.getSelection();
     if (!el || !selection || selection.isCollapsed || selection.rangeCount === 0) return null;
@@ -361,14 +372,13 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
     );
     const text = cleanSelectedText(selection.toString());
     if (!text || rects.length === 0) return null;
-    const end = range.getBoundingClientRect();
+    const bounds = range.getBoundingClientRect();
     const host = el.getBoundingClientRect();
-    // Below the selection: a phone shows its own Copy menu above it.
-    const x = Math.min(Math.max(8, end.left - host.left + el.scrollLeft), Math.max(8, el.scrollLeft + el.clientWidth - 260));
-    return { selection: { page: Number(pageEl.dataset.page), rects, text }, x, y: end.bottom - host.top + el.scrollTop + 6 };
+    const top = bounds.top - host.top + el.scrollTop;
+    return { selection: { page: Number(pageEl.dataset.page), rects, text }, x: bounds.left - host.left + el.scrollLeft, below: top + bounds.height + 6, above: top - 6 };
   }, []);
 
-  const offer = useCallback((next: { selection: PdfSelection; x: number; y: number }) => {
+  const offer = useCallback((next: Offer) => {
     setWriting(false);
     setDraft('');
     setPending((current) => (current && current.selection.text === next.selection.text && current.selection.page === next.selection.page ? current : next));
@@ -399,6 +409,25 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
       document.removeEventListener('selectionchange', onChange);
     };
   }, [selected, offer]);
+
+  // The menu and the comment box go below the selection (a phone shows its own Copy menu above it), or above it
+  // when there's no room below, and never past the PDF's edges. On a phone they are sheets instead, placed by the
+  // CSS: the buttons at the bottom of the screen, the comment box at the top, where the keyboard can't cover it.
+  useLayoutEffect(() => {
+    const pop = popover.current;
+    const el = scroller.current;
+    if (!pop || !el || !pending) return;
+    if (sheet) {
+      pop.style.left = '';
+      pop.style.top = '';
+      return;
+    }
+    const margin = 8;
+    const left = Math.min(pending.x, el.scrollLeft + el.clientWidth - pop.offsetWidth - margin);
+    pop.style.left = `${Math.max(el.scrollLeft + margin, left)}px`;
+    const fitsBelow = pending.below + pop.offsetHeight <= el.scrollTop + el.clientHeight - margin;
+    pop.style.top = `${fitsBelow ? pending.below : Math.max(el.scrollTop + margin, pending.above - pop.offsetHeight)}px`;
+  }, [pending, writing, sheet]);
 
   /** A click (not a selection) on a highlight shows its comment. */
   const onClick = (event: MouseEvent) => {
@@ -468,7 +497,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
           </div>
         )}
         {pending && (
-          <div className="pdf-popover" style={{ left: pending.x, top: pending.y }}>
+          <div ref={popover} className={`pdf-popover${sheet ? ' sheet' : ''}${writing ? ' writing' : ''}`}>
             {!writing ? (
               <div className="pdf-popover-actions">
                 <button type="button" className="primary" onMouseDown={(e) => e.preventDefault()} onClick={() => finish(null)}>

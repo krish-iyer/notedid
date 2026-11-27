@@ -65,3 +65,19 @@ export function useDebounced<T>(value: T, ms: number): T {
   }, [value, ms]);
   return debounced;
 }
+
+/** Whether a CSS media query matches, kept up to date. */
+export function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const update = () => setMatches(list.matches);
+    update();
+    list.addEventListener('change', update);
+    return () => list.removeEventListener('change', update);
+  }, [query]);
+  return matches;
+}
+
+/** Phone width: the menu for selected text and the comment box become sheets along the screen's edges. */
+export const PHONE = '(max-width: 600px)';
