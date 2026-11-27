@@ -2014,22 +2014,94 @@ input.date-input {
 }
 
 /* ---------- Narrower screens ---------- */
+.panel-toggle,
+.panel-close,
+.panel-scrim {
+  display: none;
+}
+
+.panel-toggle {
+  position: relative;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.side-panel .tabs .panel-close {
+  margin-left: auto;
+}
+
 @media (max-width: 1180px) {
   .page-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* No room beside the page: the side panel opens from a button in the page's header (.panel-toggle), over the
+     page, from the right; on a phone from the bottom (below). Not below the page, where a long note hides it. */
   .side-panel {
-    position: static;
+    display: none;
+  }
+
+  .side-panel.open {
+    display: block;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 36;
+    width: min(380px, 92vw);
     max-height: none;
     min-height: 0;
-    border-left: none;
-    border-top: 1px solid var(--line);
-    max-width: 860px;
-    width: 100%;
-    justify-self: center;
-    padding: 16px max(20px, 3vw) 40px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--bg);
+    box-shadow: var(--shadow);
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px calc(env(safe-area-inset-bottom, 0px) + 28px);
   }
+
+  .panel-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    background: rgba(15, 14, 12, 0.35);
+    touch-action: none;
+  }
+
+  .panel-toggle.in-head,
+  .panel-close {
+    display: inline-flex;
+  }
+}
+
+/* With the bar along the top of the screen: the page's panel button is there, in view wherever you are on the page. */
+@media (max-width: 800px) {
+  .panel-toggle.in-head {
+    display: none;
+  }
+
+  .panel-toggle.in-bar {
+    display: inline-flex;
+  }
+}
+
+.mobile-bar > :first-child {
+  justify-self: start;
+}
+
+.mobile-bar-end {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mobile-bar-actions {
+  display: contents;
 }
 
 /* A paper on a narrower screen: the PDF above, its comments, review notes or history below (or folded into the
@@ -2110,9 +2182,9 @@ input.date-input {
   }
 
   .mobile-bar {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px 6px;
     border-bottom: 1px solid var(--line);
     background: var(--bg);
@@ -4387,6 +4459,16 @@ button.tag-chip:hover:not(:disabled) {
     text-overflow: ellipsis;
   }
 
+  /* From the bottom, in reach of a thumb. */
+  .side-panel.open {
+    top: auto;
+    left: 0;
+    width: auto;
+    max-height: 78vh;
+    max-height: 78dvh;
+    border-top: 1px solid var(--line);
+    border-radius: 14px 14px 0 0;
+  }
 }
 
 /* ---- Phone width: the menu for a selection, and the comment box, along the screen's edges ---- */

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Icon } from './components/Icon.tsx';
 import { Overlays } from './components/Overlays.tsx';
+import { BAR_SLOT } from './components/SidePanel.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { Switcher } from './components/Switcher.tsx';
 import { useToday } from './hooks.ts';
@@ -93,9 +94,12 @@ export function App() {
             <Icon name="menu" />
           </button>
           <span className="brand">notedid</span>
-          <button type="button" className="icon-button" aria-label="Find or create" onClick={() => setSwitcher(true)}>
-            <Icon name="search" />
-          </button>
+          <span className="mobile-bar-end">
+            <span id={BAR_SLOT} className="mobile-bar-actions" />
+            <button type="button" className="icon-button" aria-label="Find or create" onClick={() => setSwitcher(true)}>
+              <Icon name="search" />
+            </button>
+          </span>
         </header>
         <main className="content">
           <Suspense fallback={<p className="muted page">Loading…</p>}>

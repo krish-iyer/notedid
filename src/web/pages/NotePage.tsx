@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { addDays, formatDayTitle, journalPath } from '../../shared/dates.ts';
 import { addExampleNotes, deleteNote, renameNote, togglePin } from '../actions.ts';
 import { api } from '../api.ts';
 import { AddToBoard } from '../components/AddToBoard.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { NoteEditorPane, SaveBadge } from '../components/NoteEditorPane.tsx';
-import { SidePanel } from '../components/SidePanel.tsx';
+import { PanelButton, SidePanel } from '../components/SidePanel.tsx';
 import { TaskRow } from '../components/TaskRow.tsx';
 import { useLiveData, useToday } from '../hooks.ts';
 import type { SaveStatus } from '../noteSession.ts';
@@ -31,6 +31,8 @@ export function NotePage({ path, anchor }: { path: string; anchor: string | null
   const note = useNote(path);
   const [content, setContent] = useState('');
   const [status, setStatus] = useState<SaveStatus>('loading');
+  const [panel, setPanel] = useState(false);
+  const closePanel = useCallback(() => setPanel(false), []);
   const title = note?.title ?? titleFromPath(path);
 
   return (
@@ -55,6 +57,7 @@ export function NotePage({ path, anchor }: { path: string; anchor: string | null
                   <Icon name="board" size={16} /> Open as board
                 </Link>
               )}
+              <PanelButton label="Links, outline and history" onClick={() => setPanel(true)} />
               <PinButton path={path} />
               {note?.kind !== 'board' && note?.kind !== 'dashboard' && <AddToBoard path={path} title={title} />}
               <Link to={`/read/${encodeNotePath(path)}`} className="icon-button" title="Read and comment">
@@ -80,7 +83,7 @@ export function NotePage({ path, anchor }: { path: string; anchor: string | null
         </header>
         <NoteEditorPane path={path} label={`Note: ${title}`} anchor={anchor} onContent={setContent} onStatus={setStatus} />
       </article>
-      <SidePanel path={path} title={title} content={content} />
+      <SidePanel path={path} title={title} content={content} open={panel} onClose={closePanel} />
     </div>
   );
 }
@@ -150,6 +153,8 @@ export function JournalPage({ date, anchor }: { date: string; anchor?: string | 
   const path = journalPath(date);
   const [content, setContent] = useState('');
   const [status, setStatus] = useState<SaveStatus>('loading');
+  const [panel, setPanel] = useState(false);
+  const closePanel = useCallback(() => setPanel(false), []);
   const title = formatDayTitle(date);
   const isToday = date === today;
 
@@ -170,6 +175,7 @@ export function JournalPage({ date, anchor }: { date: string; anchor?: string | 
                 <Icon name="right" />
               </Link>
               <input type="date" className="date-input" value={date} aria-label="Go to day" onChange={(e) => e.target.value && navigate(`/day/${e.target.value}`)} />
+              <PanelButton label="Links, outline and history" onClick={() => setPanel(true)} />
               <PinButton path={path} />
               <AddToBoard path={path} title={date} />
             </nav>
@@ -191,7 +197,7 @@ export function JournalPage({ date, anchor }: { date: string; anchor?: string | 
           onStatus={setStatus}
         />
       </article>
-      <SidePanel path={path} title={date} content={content} />
+      <SidePanel path={path} title={date} content={content} open={panel} onClose={closePanel} />
     </div>
   );
 }

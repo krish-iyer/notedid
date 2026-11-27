@@ -4,6 +4,7 @@ import { splitFrontmatter } from '../../shared/markdown.ts';
 import { newNoteId, withNoteId } from '../../shared/noteIds.ts';
 import { fetchNote, SaveConflict, saveNote } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
+import { PanelButton, PanelClose, PanelFrame } from '../components/SidePanel.tsx';
 import { openLink } from '../editor/links.ts';
 import { renderWithCards } from '../editor/cardView.ts';
 import { PHONE, useLiveData, useMediaQuery } from '../hooks.ts';
@@ -73,6 +74,8 @@ export function ReadPage({ path }: { path: string }) {
   const [draft, setDraft] = useState('');
   const [writing, setWriting] = useState(false);
   const [active, setActive] = useState<number | null>(null);
+  const [panel, setPanel] = useState(false);
+  const closePanel = useCallback(() => setPanel(false), []);
 
   // The note as HTML, cards drawn as cards. Drawn again only when its text changes: drawing it again loads its
   // images and cards again, which moves the page about while they load.
@@ -201,6 +204,7 @@ export function ReadPage({ path }: { path: string }) {
 
   const focusComment = (i: number) => {
     setActive(i);
+    closePanel();
     article.current?.querySelector(`mark[data-comment="${i}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
@@ -211,6 +215,7 @@ export function ReadPage({ path }: { path: string }) {
           <div className="title-row">
             <h1>{title}</h1>
             <div className="actions">
+              <PanelButton label={`Comments (${comments.length})`} icon="comment" count={comments.length} onClick={() => setPanel(true)} />
               <Link to={noteHref(path, note?.kind === 'paper' || note?.kind === 'board' ? undefined : note?.kind)} className="button">
                 <Icon name="edit" size={16} /> Edit
               </Link>
@@ -250,9 +255,12 @@ export function ReadPage({ path }: { path: string }) {
           )}
         </div>
       </div>
-      <aside className="side-panel" aria-label="Comments">
+      <PanelFrame open={panel} onClose={closePanel} label="Comments">
         <div className="panel-body">
-          <h3>Comments ({comments.length})</h3>
+          <div className="panel-head">
+            <h3>Comments ({comments.length})</h3>
+            <PanelClose onClose={closePanel} />
+          </div>
           {comments.length === 0 && <p className="muted small">Select text in the document to add the first comment.</p>}
           <ol className="comment-list">
             {comments.map((c, i) => (
@@ -270,7 +278,7 @@ export function ReadPage({ path }: { path: string }) {
             </Link>
           )}
         </div>
-      </aside>
+      </PanelFrame>
     </div>
   );
 }

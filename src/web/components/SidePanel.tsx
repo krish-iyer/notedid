@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { BacklinksResponse, HistoryEntry, HistoryResponse } from '../../shared/api.ts';
 import { type DiffPart, diffStats, diffText } from '../../shared/diff.ts';
 import { analyzeBody, lineIndex, splitFrontmatter } from '../../shared/markdown.ts';
@@ -6,11 +7,12 @@ import { giveNotesIds } from '../actions.ts';
 import { api, fetchNote } from '../api.ts';
 import { askConfirm } from '../dialogs.ts';
 import { compareEditor, scrollEditorTo } from '../editor/registry.ts';
+import { NO_SIDE_PANEL } from '../hooks.ts';
 import { onServerEvent } from '../live.ts';
 import { Link, noteHref } from '../router.ts';
 import { showToast } from '../toast.ts';
 import { messageOf, timeAgo } from '../util.ts';
-import { Icon } from './Icon.tsx';
+import { Icon, type IconName } from './Icon.tsx';
 
 type Tab = 'links' | 'outline' | 'history';
 
@@ -97,7 +99,7 @@ function LinksTab({ path, title }: { path: string; title: string }) {
   );
 }
 
-function OutlineTab({ path, content }: { path: string; content: string }) {
+function OutlineTab({ path, content, onJump }: { path: string; content: string; onJump: () => void }) {
   const headings = useMemo(() => {
     const { bodyOffset } = splitFrontmatter(content);
     return analyzeBody(content.slice(bodyOffset), bodyOffset, lineIndex(content)).headings;
@@ -107,7 +109,16 @@ function OutlineTab({ path, content }: { path: string; content: string }) {
     <ul className="outline panel-body">
       {headings.map((h, i) => (
         <li key={`${h.line}-${i}`} style={{ paddingLeft: `${(h.level - 1) * 12}px` }}>
-          <button type="button" className="link-button" onClick={() => scrollEditorTo(path, h.line)}>
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              // From the panel over the note (a narrow screen), to the note: without a phone's keyboard opening.
+              const over = window.matchMedia(NO_SIDE_PANEL).matches;
+              scrollEditorTo(path, h.line, { focus: !over });
+              onJump();
+            }}
+          >
             {h.text || '(untitled heading)'}
           </button>
         </li>
@@ -295,11 +306,67 @@ export function HistoryTab({ path, current, onShowChanges }: { path: string; cur
   );
 }
 
+/** Where a page puts buttons of its own in the bar along the top of a phone's screen (App). */
+export const BAR_SLOT = 'mobile-bar-actions';
+
+/**
+ * Opens a page's side panel, on a screen too narrow to show it beside the page: in the page's header, and on a
+ * phone in the bar along the top of the screen instead, which stays in view however far down a note you are.
+ */
+export function PanelButton({ label, icon = 'panel', count, onClick }: { label: string; icon?: IconName; count?: number; onClick: () => void }) {
+  const [bar, setBar] = useState<HTMLElement | null>(null);
+  useEffect(() => setBar(document.getElementById(BAR_SLOT)), []);
+  const button = (where: 'in-head' | 'in-bar') => (
+    <button type="button" className={`icon-button panel-toggle ${where}`} title={label} aria-label={label} onClick={onClick}>
+      <Icon name={icon} />
+      {count ? <span className="strip-count">{count}</span> : null}
+    </button>
+  );
+  return (
+    <>
+      {button('in-head')}
+      {bar && createPortal(button('in-bar'), bar)}
+    </>
+  );
+}
+
+/** Closes a side panel opened over the page (shown only then). */
+export function PanelClose({ onClose }: { onClose: () => void }) {
+  return (
+    <button type="button" className="icon-button panel-close" title="Close" aria-label="Close the panel" onClick={onClose}>
+      <Icon name="close" />
+    </button>
+  );
+}
+
+/**
+ * A page's side panel: beside the page on a wide screen. On a narrower one it opens from a PanelButton, over the
+ * page: from the right, or from the bottom on a phone. A link followed from it closes it.
+ */
+export function PanelFrame({ open, onClose, label, children }: { open: boolean; onClose: () => void; label: string; children: ReactNode }) {
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    panel.current?.querySelector<HTMLElement>('.panel-close')?.focus({ preventScroll: true });
+    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  return (
+    <>
+      {open && <div className="panel-scrim" onClick={onClose} />}
+      <aside ref={panel} className={open ? 'side-panel open' : 'side-panel'} aria-label={label} onClick={(e) => (e.target as Element).closest('a') && onClose()}>
+        {children}
+      </aside>
+    </>
+  );
+}
+
 /** Beside a note: what links here, its outline, and its history. */
-export function SidePanel({ path, title, content }: { path: string; title: string; content: string }) {
+export function SidePanel({ path, title, content, open, onClose }: { path: string; title: string; content: string; open: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('links');
   return (
-    <aside className="side-panel" aria-label="About this note">
+    <PanelFrame open={open} onClose={onClose} label="About this note">
       <div className="tabs" role="tablist">
         {(
           [
@@ -312,10 +379,11 @@ export function SidePanel({ path, title, content }: { path: string; title: strin
             <Icon name={icon} size={15} /> {label}
           </button>
         ))}
+        <PanelClose onClose={onClose} />
       </div>
       {tab === 'links' && <LinksTab path={path} title={title} />}
-      {tab === 'outline' && <OutlineTab path={path} content={content} />}
-      {tab === 'history' && <HistoryTab path={path} current={content} />}
-    </aside>
+      {tab === 'outline' && <OutlineTab path={path} content={content} onJump={onClose} />}
+      {tab === 'history' && <HistoryTab path={path} current={content} onShowChanges={onClose} />}
+    </PanelFrame>
   );
 }

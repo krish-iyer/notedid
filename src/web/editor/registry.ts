@@ -89,12 +89,12 @@ export function appendToEditor(key: string, block: string, options: { focus?: bo
   return true;
 }
 
-/** Scrolls an open note to a 1-based line and selects it briefly. */
-export function scrollEditorTo(key: string, line: number): boolean {
+/** Scrolls an open note to a 1-based line and selects it. With `focus: false`, a phone's keyboard doesn't open. */
+export function scrollEditorTo(key: string, line: number, options: { focus?: boolean } = {}): boolean {
   const view = editors.get(key);
   if (!view || line < 1 || line > view.state.doc.lines) return false;
   const target = view.state.doc.line(line);
   view.dispatch({ selection: { anchor: target.from, head: target.to }, effects: EditorView.scrollIntoView(target.from, { y: 'center' }) });
-  view.focus();
+  if (options.focus ?? true) view.focus();
   return true;
 }

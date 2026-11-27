@@ -81,3 +81,5 @@ export function useMediaQuery(query: string): boolean {
 
 /** Phone width: the menu for selected text and the comment box become sheets along the screen's edges. */
 export const PHONE = '(max-width: 600px)';
+/** Too narrow for a note's side panel beside it: the panel opens from a button instead. */
+export const NO_SIDE_PANEL = '(max-width: 1180px)';
