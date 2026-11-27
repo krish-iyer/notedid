@@ -170,7 +170,9 @@ These notes show what notedid does, one thing each. They're ordinary notes: chan
 8. [[Example dashboard]]: a paper, notes and a board side by side, in tabs
 9. [[Example · Reading view and comments]]: commenting on a note
 10. [[Example · History, sync and safety]]: versions, Dropbox sync, backups and the vault
-11. [[Example whiteboard]]: drawings and diagrams, made with Excalidraw. A link can open one of its frames: [[Example whiteboard#Architecture]]
+11. [[Example whiteboard]]: drawings and diagrams, made with Excalidraw. A link opens it on one of its frames: [[Example whiteboard#Architecture]]. With a ! in front, a note shows the frame as a picture that keeps up with the whiteboard, like this one (click it to open the whiteboard there):
+
+![[Example whiteboard#Architecture]]
 
 **Today**, at the top of the sidebar, is your journal: one note per day, and the page the app opens on. Type anything there. From anywhere, **Ctrl+K** then **Alt+Enter** adds what you typed to it.
 `,

@@ -180,11 +180,12 @@ A few things differ in the browser-only app:
 
 - **Whiteboards** in the sidebar → **New whiteboard**; Ctrl+K understands `New whiteboard` too. Each is Excalidraw's own file, `whiteboards/<name>.excalidraw`, which the Excalidraw app opens too, and a `.excalidraw` file you put in the notes folder shows up here.
 - It saves a moment after each change. A change made elsewhere (another window, another device through sync) comes in shape by shape, the newer of each kept. If two devices change it at the same time, the other version is kept beside it as a copy.
-- **Frames** (the frame tool, or F) mark out the diagrams on a board. Name a frame (double-click its title) to link to it: `[[Whiteboard#Frame]]` in a note opens the whiteboard zoomed to that frame. **Link**, at the top of a whiteboard, lists its frames and copies a link to any of them, or to the whole board.
+- **Frames** (the frame tool, or F) mark out the diagrams on a board. Name a frame (double-click its title) to use it: `[[Whiteboard#Frame]]` in a note opens the whiteboard zoomed to that frame.
+- **A diagram in a note:** put `!` in front of the link. `![[Whiteboard#Frame]]` shows that frame in the note as a picture, cut to the frame's edges, and `![[Whiteboard]]` the whole board. It's drawn from the whiteboard itself, so it changes when the whiteboard does, and clicking it opens the whiteboard on that frame. To get one, **Link** at the top of a whiteboard copies a picture or a link of any of its frames, or of the whole board, to paste into a note. Or type `![[` in a note (or `/` → **Whiteboard picture**) and pick a whiteboard or one of its frames. A picture of a whiteboard that doesn't exist yet, like `![[New diagram]]`, makes it when you click it.
 - A shape can link to a note too: set its link to `[[Note]]`.
 - Search finds the text written on whiteboards, and `[[links]]` and `#tags` in that text count, as backlinks and tags.
 - In a dashboard, **Add Whiteboard** puts one in a tab, and `- [[Whiteboard#Frame]]` shows it on that frame.
-- **Export** is Excalidraw's: its menu (☰) → **Export image** saves a PNG or an SVG, or copies it; select a frame first to export only that diagram. **Save to** downloads the .excalidraw file.
+- **Export** is Excalidraw's, for a copy to use outside notedid: its menu (☰) → **Export image** saves a PNG or an SVG, or copies it; select a frame first to export only that diagram. **Save to** downloads the .excalidraw file.
 - Excalidraw's fonts come with the app, so whiteboards work offline too. They have no History of their own; the git backup and Dropbox keep their past.
 
 **Vault.**
