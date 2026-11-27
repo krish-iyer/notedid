@@ -4,11 +4,12 @@ import { parseWikiTarget, safeDecodeURI } from '../../shared/markdown.ts';
 import { fileUrl } from '../api.ts';
 import { resolveNote } from '../stores.ts';
 import { dirname, escapeHtml, joinPath } from '../util.ts';
+import { PICTURE_TAG } from '../whiteboardPicture.ts';
 
 /**
- * Markdown as HTML, for cards in the editor and for the reading view: [[links]], #tags and images
- * next to the note, made safe. In the vault, links, tags and images show as their text, so nothing
- * is fetched or opened from there.
+ * Markdown as HTML, for cards in the editor and for the reading view: [[links]], #tags, images next
+ * to the note and pictures of whiteboards (![[Whiteboard#Frame]]), made safe. In the vault, links,
+ * tags and images show as their text, so nothing is fetched or opened from there.
  */
 
 export interface HtmlOptions {
@@ -28,18 +29,26 @@ function create({ notePath, privateMode }: HtmlOptions): Marked {
         level: 'inline',
         start: (src: string) => {
           const i = src.indexOf('[[');
-          return i < 0 ? undefined : i;
+          if (i < 0) return undefined;
+          return src[i - 1] === '!' ? i - 1 : i;
         },
         tokenizer: (src: string) => {
-          const match = /^\[\[([^\]\n]+)\]\]/.exec(src);
-          return match ? { type: 'wikilink', raw: match[0], inner: match[1] ?? '' } : undefined;
+          const match = /^(!?)\[\[([^\]\n]+)\]\]/.exec(src);
+          return match ? { type: 'wikilink', raw: match[0], inner: match[2] ?? '', embed: match[1] === '!' } : undefined;
         },
         renderer: (token) => {
           const { target, heading, label } = parseWikiTarget(String(token.inner));
+          const bang = token.embed ? '!' : '';
           const text = escapeHtml(label ?? target);
-          if (privateMode) return text;
-          const missing = !/\.pdf$/i.test(target) && resolveNote(target, notePath ?? undefined) === null;
-          return `<a href="#" class="cm-md-wikilink${missing ? ' missing' : ''}" data-target="${escapeHtml(target)}" data-heading="${escapeHtml(heading ?? '')}">${text}</a>`;
+          if (privateMode) return `${bang}${text}`;
+          const note = /\.pdf$/i.test(target) ? null : resolveNote(target, notePath ?? undefined);
+          // ![[Whiteboard#Frame]]: its picture (src/web/whiteboardPicture.ts).
+          if (token.embed && note?.kind === 'whiteboard') {
+            return `<${PICTURE_TAG} path="${escapeHtml(note.path)}"${heading ? ` frame="${escapeHtml(heading)}"` : ''}></${PICTURE_TAG}>`;
+          }
+          const missing = !/\.pdf$/i.test(target) && note === null;
+          const embed = token.embed ? ' data-embed=""' : '';
+          return `${bang}<a href="#" class="cm-md-wikilink${missing ? ' missing' : ''}" data-target="${escapeHtml(target)}" data-heading="${escapeHtml(heading ?? '')}"${embed}>${text}</a>`;
         },
       },
       {
@@ -87,7 +96,11 @@ function markedFor(options: HtmlOptions): Marked {
   return marked;
 }
 
-const SAFE = { FORBID_TAGS: ['style', 'form', 'button', 'textarea', 'select', 'option'] };
+const SAFE = {
+  FORBID_TAGS: ['style', 'form', 'button', 'textarea', 'select', 'option'],
+  // Whiteboard pictures, and only with what they need.
+  CUSTOM_ELEMENT_HANDLING: { tagNameCheck: new RegExp(`^${PICTURE_TAG}$`), attributeNameCheck: /^(path|frame)$/, allowCustomizedBuiltInElements: false },
+};
 
 /** A whole note's body (the reading view). */
 export function documentHtml(source: string, options: HtmlOptions): string {

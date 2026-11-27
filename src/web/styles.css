@@ -45,6 +45,8 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
+  /* Whiteboard pictures in notes, dark the way Excalidraw draws them dark. */
+  --whiteboard-filter: invert(93%) hue-rotate(180deg);
   --bg: #171614;
   --surface: #201f1c;
   --surface-2: #2a2825;
@@ -80,6 +82,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
+    --whiteboard-filter: invert(93%) hue-rotate(180deg);
     --bg: #171614;
     --surface: #201f1c;
     --surface-2: #2a2825;

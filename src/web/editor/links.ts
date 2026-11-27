@@ -12,7 +12,8 @@ import { notePathFacet, privateModeFacet } from './context.ts';
 import { DATE_IN_TEXT } from './livePreview.ts';
 
 export type LinkTarget =
-  | { kind: 'wiki'; target: string; heading: string | null }
+  /** `embed`: ![[...]], a picture, so a missing one is a whiteboard to make. */
+  | { kind: 'wiki'; target: string; heading: string | null; embed?: boolean }
   | { kind: 'url'; url: string }
   | { kind: 'file'; href: string }
   | { kind: 'tag'; tag: string }
@@ -24,7 +25,7 @@ export function linkAt(view: EditorView, pos: number): LinkTarget | null {
   for (let node: SyntaxNode | null = syntaxTree(state).resolveInner(pos, 1); node; node = node.parent) {
     if (node.name === 'WikiLink') {
       const { target, heading } = parseWikiTarget(state.sliceDoc(node.from + 2, node.to - 2));
-      return { kind: 'wiki', target, heading };
+      return { kind: 'wiki', target, heading, embed: node.parent?.name === 'WikiEmbed' };
     }
     if (node.name === 'Link') {
       const url = node.getChild('URL');
@@ -116,6 +117,13 @@ export async function openLink(target: LinkTarget, fromPath: string | null, opti
         return;
       }
       try {
+        // ![[New diagram]] makes a whiteboard to draw it on; [[New note]], a note.
+        if (target.embed) {
+          const { path } = await api.createWhiteboard(target.target);
+          await refreshNotes();
+          navigate(noteHref(path, 'whiteboard'));
+          return;
+        }
         const { path } = await api.createNote(target.target);
         await refreshNotes();
         navigate(noteHref(path));

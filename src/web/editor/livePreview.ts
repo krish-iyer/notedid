@@ -6,7 +6,8 @@ import { parseWikiTarget, safeDecodeURI } from '../../shared/markdown.ts';
 import { fileUrl } from '../api.ts';
 import { resolveNote } from '../stores.ts';
 import { dirname, joinPath } from '../util.ts';
-import { notePathFacet } from './context.ts';
+import { whiteboardPicture } from '../whiteboardPicture.ts';
+import { notePathFacet, privateModeFacet } from './context.ts';
 import { refreshDecorations } from './registry.ts';
 
 /**
@@ -63,6 +64,26 @@ class ImageWidget extends WidgetType {
   }
 }
 
+/** ![[Whiteboard]] or ![[Whiteboard#Frame]]: a picture of it (src/web/whiteboardPicture.ts). */
+class WhiteboardWidget extends WidgetType {
+  readonly path: string;
+  readonly frame: string | null;
+
+  constructor(path: string, frame: string | null) {
+    super();
+    this.path = path;
+    this.frame = frame;
+  }
+
+  override eq(other: WhiteboardWidget): boolean {
+    return other.path === this.path && other.frame === this.frame;
+  }
+
+  toDOM(): HTMLElement {
+    return whiteboardPicture(this.path, this.frame);
+  }
+}
+
 export const DATE_IN_TEXT = /(?<![\w/-])(\d{4}-\d{2}-\d{2})(?![\w/-])/g;
 
 function imageSource(src: string, notePath: string | null): string {
@@ -88,6 +109,7 @@ function build(view: EditorView): DecorationSet {
   const doc = state.doc;
   const active = activeLines(view);
   const notePath = state.facet(notePathFacet);
+  const privateMode = state.facet(privateModeFacet);
   const ranges: Range<Decoration>[] = [];
 
   const isActive = (from: number, to: number) => {
@@ -175,6 +197,16 @@ function build(view: EditorView): DecorationSet {
               const alt = marks.length >= 2 ? doc.sliceString(marks[0]?.to ?? node.from, marks[1]?.from ?? node.from) : '';
               ranges.push(Decoration.replace({ widget: new ImageWidget(imageSource(doc.sliceString(url.from, url.to), notePath), alt) }).range(node.from, node.to));
             }
+            return false;
+          }
+          case 'WikiEmbed': {
+            // A whiteboard's picture; anything else shows as its "!" and the link.
+            const link = node.node.getChild('WikiLink');
+            if (!link || privateMode || isActive(node.from, node.to)) return undefined;
+            const { target, heading } = parseWikiTarget(doc.sliceString(link.from + 2, link.to - 2));
+            const board = resolveNote(target, notePath ?? undefined);
+            if (board?.kind !== 'whiteboard') return undefined;
+            ranges.push(Decoration.replace({ widget: new WhiteboardWidget(board.path, heading) }).range(node.from, node.to));
             return false;
           }
           case 'WikiLink': {

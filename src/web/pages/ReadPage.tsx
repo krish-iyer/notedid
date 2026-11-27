@@ -189,7 +189,7 @@ export function ReadPage({ path }: { path: string }) {
     const href = anchor.getAttribute('href') ?? '';
     if (wiki !== null) {
       event.preventDefault();
-      void openLink({ kind: 'wiki', target: wiki, heading: anchor.getAttribute('data-heading') || null }, path);
+      void openLink({ kind: 'wiki', target: wiki, heading: anchor.getAttribute('data-heading') || null, embed: anchor.hasAttribute('data-embed') }, path);
     } else if (tag) {
       event.preventDefault();
       void openLink({ kind: 'tag', tag }, path);
