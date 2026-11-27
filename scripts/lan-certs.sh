@@ -5,7 +5,7 @@
 #                    computer's name, so its key can't be used to pass off any other site.
 #   server.key, .crt this computer's certificate for its current addresses and name, made each time.
 #   public/          what a phone may fetch over plain http: the authority's certificate and a page
-#                    saying what to do with it.
+#                    saying what to do with it, and the apps if they were built (make apk, make desktop).
 # Usage: sh scripts/lan-certs.sh "<address> [<other address>…]" <host name or ""> <https port>
 # The first address is the one on the network; others are, say, a VPN's.
 set -eu
@@ -71,6 +71,33 @@ if [ -s dist/notedid.apk ]; then
 <p><a href=\"/notedid.apk\">Download notedid for Android</a> ($(du -h dist/notedid.apk | cut -f1)), open the downloaded file, and allow installing it when Android asks. It needs no certificate, and updates install over it the same way. Its SHA-256 is <code style=\"word-break: break-all\">$apk_sum</code>.</p>
 <h2>On iPhone (or Android, in the browser)</h2>"
 fi
+# The desktop app, if it was built (make desktop): the newest of each kind. It needs no certificate either.
+desktop=""
+newest() { ls -t dist/desktop/$1 2> /dev/null | head -1; }
+deb=$(newest 'notedid-*-amd64.deb')
+appimage=$(newest 'notedid-*-x86_64.AppImage')
+exe=$(newest 'notedid-setup-*.exe')
+mac_arm=$(newest 'notedid-*-mac-arm64.zip')
+mac_intel=$(newest 'notedid-*-mac-x64.zip')
+if [ -n "$deb$appimage$exe$mac_arm$mac_intel" ]; then
+  mkdir -p .lan/public/desktop
+  rm -f .lan/public/desktop/*
+  # A link to a copy of the file, with its size and SHA-256 to check it by.
+  offer() {
+    cp "$1" .lan/public/desktop/
+    printf '<a href="/desktop/%s">%s</a> (%s; SHA-256 <code style="word-break: break-all">%s</code>)' "$(basename "$1")" "$2" "$(du -h "$1" | cut -f1)" "$(sha256sum "$1" | cut -d' ' -f1)"
+  }
+  items=""
+  [ -n "$deb" ] && items="$items<li><b>Linux:</b> $(offer "$deb" ".deb, for Debian and Ubuntu")</li>"
+  [ -n "$appimage" ] && items="$items<li><b>Linux, any:</b> $(offer "$appimage" "AppImage")</li>"
+  [ -n "$exe" ] && items="$items<li><b>Windows:</b> $(offer "$exe" "installer"). Windows warns that it comes from an unknown publisher: <i>More info → Run anyway</i>.</li>"
+  [ -n "$mac_arm" ] && items="$items<li><b>Mac with Apple Silicon:</b> $(offer "$mac_arm" "zip")</li>"
+  [ -n "$mac_intel" ] && items="$items<li><b>Mac with Intel:</b> $(offer "$mac_intel" "zip")</li>"
+  [ -n "$mac_arm$mac_intel" ] && items="$items<li><b>On a Mac,</b> unzip it and move notedid to Applications. The first time, macOS can’t check it: choose <i>Done</i>, then System Settings → Privacy &amp; Security → <i>Open Anyway</i>.</li>"
+  desktop="<h2>On a computer: the desktop app</h2>
+<p>notedid in a window of its own, keeping your notes as files in a folder you choose.</p>
+<ul>$items</ul>"
+fi
 cat > .lan/public/index.html << HTML
 <!doctype html>
 <html lang="en">
@@ -93,6 +120,7 @@ $android
   <li><p>Open $links and install the app: on an iPhone, Safari’s Share → Add to Home Screen; on Android, the browser’s menu → Install app.</p></li>
 </ol>
 <p>This computer only hands out the app. Your notes stay on the phone, and sync through your Dropbox.</p>
+$desktop
 </body>
 </html>
 HTML

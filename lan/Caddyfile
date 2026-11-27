@@ -32,6 +32,11 @@ http://:8080 {
 		header Content-Type application/vnd.android.package-archive
 		file_server
 	}
+	# The desktop app (make desktop), saved as files rather than opened.
+	handle /desktop/* {
+		header Content-Disposition attachment
+		file_server
+	}
 	handle {
 		rewrite * /index.html
 		file_server

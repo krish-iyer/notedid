@@ -47,6 +47,8 @@ make desktop  # build it → dist/desktop/
 - **Windows:** run `notedid-setup-<version>.exe`. It installs for your user alone, without asking for an administrator. Windows warns about an app from an unknown publisher, because it isn't signed: **More info → Run anyway**.
 - **macOS:** unzip `notedid-<version>-mac-arm64.zip` (Apple Silicon) or `-mac-x64.zip` (Intel), and move notedid to Applications. It is signed ad hoc, not with an Apple developer certificate, so the first time, macOS says it can't check it: choose **Done**, then System Settings → Privacy & Security → **Open Anyway** (next to "notedid was blocked"), and confirm. After that it opens like any app. (It may also ask once whether notedid may use your Documents folder, where your notes are suggested to go.)
 
+`make lan`'s page (see below) offers them for download to the other computers on your network too.
+
 The first time it starts, it asks where to keep your notes (Documents/notedid, or a folder you choose, such as one you already keep markdown notes in). **File → Open Notes Folder…** switches to another folder, and **File → Show Notes Folder** opens it in your file manager. Sync with Dropbox works as in the other versions. Where git is installed, the folder gets a git backup too, as with the Docker version: so open a folder in one of them at a time.
 
 It opens no network port: the window asks the app itself for its pages and notes. Links to the web open in your browser, and links to PDFs and pictures in your notes in the computer's own app for them.

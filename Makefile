@@ -93,6 +93,7 @@ apk: $(DEPS) | $(SETUP)
 DESKTOP ?=
 desktop: $(DEPS) | $(SETUP)
 	$(COMPOSE) --profile desktop run --rm desktop sh scripts/build-desktop.sh $(DESKTOP)
+	@test ! -d .lan/public || echo "make lan offers them on your network (run it again to put these there)."
 
 shell: | $(SETUP)
 	$(RUN) bash
