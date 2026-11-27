@@ -42,7 +42,7 @@ export function readFrontmatter(content: string): { data: Record<string, unknown
 }
 
 export function stemOf(path: string): string {
-  return (path.split('/').pop() ?? path).replace(/\.md$/i, '');
+  return (path.split('/').pop() ?? path).replace(/\.(md|excalidraw)$/i, '');
 }
 
 export function analyzeNote(path: string, content: string): NoteAnalysis {
@@ -53,11 +53,13 @@ export function analyzeNote(path: string, content: string): NoteAnalysis {
   const fmTitle = typeof frontmatter.title === 'string' && frontmatter.title.trim() ? frontmatter.title.trim() : null;
   const title = fmTitle ?? analysis.firstH1 ?? stemOf(path);
   const type = typeof frontmatter.type === 'string' ? frontmatter.type.toLowerCase() : '';
-  const kind: NoteKind = date ? 'journal' : type === 'paper' || type === 'board' || type === 'dashboard' || type === 'comments' ? type : 'note';
+  const kind: NoteKind = date ? 'journal' : type === 'paper' || type === 'board' || type === 'dashboard' || type === 'comments' || type === 'whiteboard' ? type : 'note';
   const metaTags = [...stringList(frontmatter.tags), ...stringList(frontmatter.tag)].map((t) => t.replace(/^#/, '').toLowerCase());
   const tags = [...new Set([...analysis.tags, ...metaTags])];
   return {
     ...analysis,
+    // A whiteboard's text has no tasks: ticking one would mean editing the drawing by its lines.
+    tasks: kind === 'whiteboard' ? [] : analysis.tasks,
     tags,
     metaTags: [...new Set(metaTags)],
     id: noteIdOf(content),

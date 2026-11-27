@@ -1,5 +1,6 @@
 import type { SyncStatus } from '../shared/api.ts';
 import { merge3 } from '../shared/merge3.ts';
+import { isWhiteboardPath } from '../shared/whiteboards.ts';
 import { importable } from './archive.ts';
 import type { Disk } from './disk.ts';
 import { contentHash, DROPBOX, Dropbox, type DropboxEndpoints, DropboxError, type DropboxTokens, type RemoteFile, tokensFromCode } from './dropbox.ts';
@@ -414,6 +415,14 @@ export class SyncService {
       await keep(local.path, encode(winner), newer === 'ours');
       return newer === 'ours' ? 'up' : 'down';
     }
+    if (isWhiteboardPath(local.path)) {
+      // A drawing changed on both: the newer stays, and the other is kept beside it, not lost.
+      const [winner, loser, loserTime] = newer === 'theirs' ? [theirBytes, ourBytes, local.mtime] : [ourBytes, theirBytes, there.modified];
+      await this.#copyBeside(local.path, loser, loserTime);
+      state.conflicts = [{ path: local.path, at: new Date().toISOString() }, ...state.conflicts.filter((c) => c.path !== local.path)].slice(0, 20);
+      await keep(local.path, winner, newer === 'ours');
+      return newer === 'ours' ? 'up' : 'down';
+    }
     if (newer === 'theirs') {
       await keep(local.path, theirBytes, false);
       return 'down';
@@ -430,10 +439,17 @@ export class SyncService {
       await this.#versions.keepText(id, loser, at);
       return;
     }
+    await this.#copyBeside(rel, encode(loser), at);
+  }
+
+  /** Writes `bytes` next to `rel`, as "name (other device 2026-11-27 10.30).md" (or .excalidraw). */
+  async #copyBeside(rel: string, bytes: Uint8Array, at: number): Promise<void> {
     const stamp = new Date(at).toISOString().slice(0, 16).replace('T', ' ').replace(':', '.');
-    let copy = rel.replace(/\.md$/i, ` (other device ${stamp}).md`);
-    for (let n = 2; (await this.#disk.stat(copy)) !== null; n++) copy = rel.replace(/\.md$/i, ` (other device ${stamp} ${n}).md`);
-    await this.#disk.write(copy, encode(loser));
+    const ext = /\.excalidraw$/i.test(rel) ? rel.slice(-'.excalidraw'.length) : rel.slice(-'.md'.length);
+    const base = rel.slice(0, -ext.length);
+    let copy = `${base} (other device ${stamp})${ext}`;
+    for (let n = 2; (await this.#disk.stat(copy)) !== null; n++) copy = `${base} (other device ${stamp} ${n})${ext}`;
+    await this.#disk.write(copy, bytes);
     await this.#pulled(copy);
   }
 }

@@ -1,4 +1,4 @@
-import type { CaptureRequest } from '../shared/api.ts';
+import type { CaptureRequest, NoteDoc } from '../shared/api.ts';
 import { appendBlock, formatCapture } from '../shared/capture.ts';
 import { isISODate, journalDateOf, journalPath, localISODate, localTime } from '../shared/dates.ts';
 import { setFrontmatterField } from '../shared/frontmatter.ts';
@@ -6,12 +6,13 @@ import { analyzeBody, lineIndex, linkKey, splitFrontmatter } from '../shared/mar
 import { newNoteId, noteIdOf, withNoteId } from '../shared/noteIds.ts';
 import { slugify, uniqueName } from '../shared/slug.ts';
 import { toggleTaskLine } from '../shared/tasks.ts';
+import { emptyWhiteboard, isWhiteboardPath, WHITEBOARDS_FOLDER, whiteboardFileStem, whiteboardIndexText, whiteboardName } from '../shared/whiteboards.ts';
 import { stemOf } from './analyze.ts';
 import type { EventHub } from './events.ts';
 import type { GitBackup } from './git.ts';
 import { findMention, type NoteIndex } from './noteIndex.ts';
 import { dirname, join, relative as relativePath } from './posixPath.ts';
-import { ConflictError, hashContent, type NoteStore, normalizeNotePath, PathError } from './storage.ts';
+import { ConflictError, hashContent, INDEXED_EXTENSIONS, type NoteStore, normalizeNotePath, normalizePath, PathError, WHITEBOARD_EXTENSIONS } from './storage.ts';
 import type { VersionHistory } from './versions.ts';
 
 /** A request that can't be carried out as asked (bad input, or the thing isn't there). */
@@ -59,27 +60,40 @@ export class NoteService {
     this.#git = deps.git;
   }
 
+  /** Notes and whiteboards, outside the trash: what the index holds. */
   static indexable(rel: string): boolean {
-    return rel.toLowerCase().endsWith('.md') && !rel.startsWith('trash/');
+    return (rel.toLowerCase().endsWith('.md') || isWhiteboardPath(rel)) && !rel.startsWith('trash/');
   }
 
-  /** Indexes every note in the folder. Returns how many. */
+  /** A note, or a whiteboard's file (src/shared/whiteboards.ts). */
+  async #read(rel: string): Promise<NoteDoc> {
+    return isWhiteboardPath(rel) ? this.#store.readText(normalizePath(rel, WHITEBOARD_EXTENSIONS)) : this.#store.read(rel);
+  }
+
+  /** What the index keeps of a file: a note as it is, a whiteboard as the text on it. */
+  #indexed(rel: string, content: string): string {
+    return isWhiteboardPath(rel) ? whiteboardIndexText(content, whiteboardName(rel)) : content;
+  }
+
+  /** Indexes every note and whiteboard in the folder. Returns how many. */
   async loadAll(): Promise<number> {
-    const paths = (await this.#store.list(['.md'])).filter(NoteService.indexable);
+    const paths = (await this.#store.list(INDEXED_EXTENSIONS)).filter(NoteService.indexable);
     for (const rel of paths) await this.refresh(rel, { quiet: true });
     return paths.length;
   }
 
+  /** Saves a note or a whiteboard. Whiteboards have no versions of their own (the git backup and Dropbox keep their past). */
   async save(rel: string, content: string, baseHash: string | null, options: SaveOptions = {}): Promise<{ path: string; hash: string }> {
-    const version = options.version !== false && NoteService.indexable(rel);
+    const whiteboard = isWhiteboardPath(rel);
+    const version = options.version !== false && NoteService.indexable(rel) && !whiteboard;
     if (version) await this.#versions.beforeChange(rel);
-    const saved = await this.#store.write(rel, content, baseHash);
+    const saved = whiteboard ? await this.#store.writeText(normalizePath(rel, WHITEBOARD_EXTENSIONS), content, baseHash) : await this.#store.write(rel, content, baseHash);
     this.#afterWrite(saved.path, content, saved.hash, version);
     return saved;
   }
 
   #afterWrite(rel: string, content: string, hash: string, version = true): void {
-    if (NoteService.indexable(rel)) this.#index.upsert(rel, content, Date.now(), hash);
+    if (NoteService.indexable(rel)) this.#index.upsert(rel, this.#indexed(rel, content), Date.now(), hash);
     this.#events.emit({ type: 'changed', path: rel, hash });
     if (version && NoteService.indexable(rel)) this.#versions.touch(rel);
     this.#git?.touch();
@@ -94,7 +108,7 @@ export class NoteService {
     if (!NoteService.indexable(rel)) return;
     let doc;
     try {
-      doc = await this.#store.read(rel);
+      doc = await this.#read(rel);
     } catch {
       return; // not a valid note path, or not UTF-8: leave it alone
     }
@@ -109,17 +123,17 @@ export class NoteService {
     }
     if (doc.hash === known) return;
     const stat = await this.#store.stat(rel);
-    this.#index.upsert(rel, doc.content, stat?.mtime ?? Date.now(), doc.hash);
+    this.#index.upsert(rel, this.#indexed(rel, doc.content), stat?.mtime ?? Date.now(), doc.hash);
     if (!options.quiet) {
       this.#events.emit({ type: 'changed', path: rel, hash: doc.hash });
-      if (options.version !== false) this.#versions.touch(rel);
+      if (options.version !== false && !isWhiteboardPath(rel)) this.#versions.touch(rel);
       this.#git?.touch();
     }
   }
 
   /** Brings the index in line with the folder (after folder moves, which file events don't spell out, or an import). */
   async rescan(options: { version?: boolean } = {}): Promise<void> {
-    const onDisk = new Set((await this.#store.list(['.md'])).filter(NoteService.indexable));
+    const onDisk = new Set((await this.#store.list(INDEXED_EXTENSIONS)).filter(NoteService.indexable));
     for (const rel of onDisk) await this.refresh(rel, options);
     for (const rel of this.#index.paths()) if (!onDisk.has(rel)) await this.refresh(rel, options);
   }
@@ -157,6 +171,26 @@ export class NoteService {
     const rel = `${folder}/${slug}.md`;
     await this.save(rel, withNoteId(content ?? `# ${name}\n\n`, newNoteId()), null);
     return rel;
+  }
+
+  /** Starts a whiteboard called `title` in whiteboards/; its file is named after it. Returns its path. */
+  async createWhiteboard(title: string, content = emptyWhiteboard()): Promise<string> {
+    const name = title.trim();
+    if (!name) throw new PathError('A whiteboard needs a name');
+    const rel = this.#freeWhiteboardPath(WHITEBOARDS_FOLDER, whiteboardFileStem(name), null);
+    await this.save(rel, content, null);
+    return rel;
+  }
+
+  /** `dir/stem.excalidraw`, or `dir/stem 2.excalidraw` and so on if that's taken (by another than `own`). */
+  #freeWhiteboardPath(dir: string, stem: string, own: string | null): string {
+    const taken = new Set(this.#index.paths().map((p) => p.toLowerCase()));
+    const path = (n: number) => `${dir}/${n === 1 ? stem : `${stem} ${n}`}.excalidraw`;
+    for (let n = 1; n < 10_000; n++) {
+      const candidate = path(n);
+      if (candidate.toLowerCase() === own?.toLowerCase() || !taken.has(candidate.toLowerCase())) return candidate;
+    }
+    throw new PathError(`No free name for ${stem}`);
   }
 
   /** Notes without an id, and notes that share one (copies): the oldest keeps it, the others need new ones. */
@@ -248,28 +282,32 @@ export class NoteService {
     // Who links here, worked out before the title changes (the index matches links by name).
     const sources = new Set(this.#index.backlinks(rel).linked.map((l) => l.path));
 
-    // 1. The title inside the note: front matter title, or the first level-1 heading.
-    await this.#edit(rel, (content) => {
-      const { bodyOffset } = splitFrontmatter(content);
-      const front = content.slice(0, bodyOffset);
-      const titleLine = /^title:.*$/m;
-      if (front && titleLine.test(front)) return front.replace(titleLine, `title: ${JSON.stringify(title)}`) + content.slice(bodyOffset);
-      const body = content.slice(bodyOffset);
-      const h1 = /^#[ \t]+.*$/m;
-      return h1.test(body) ? front + body.replace(h1, `# ${title}`) : null;
-    });
+    const whiteboard = isWhiteboardPath(rel);
+    // 1. The title inside the note: front matter title, or the first level-1 heading. (A whiteboard's is its file name.)
+    if (!whiteboard) {
+      await this.#edit(rel, (content) => {
+        const { bodyOffset } = splitFrontmatter(content);
+        const front = content.slice(0, bodyOffset);
+        const titleLine = /^title:.*$/m;
+        if (front && titleLine.test(front)) return front.replace(titleLine, `title: ${JSON.stringify(title)}`) + content.slice(bodyOffset);
+        const body = content.slice(bodyOffset);
+        const h1 = /^#[ \t]+.*$/m;
+        return h1.test(body) ? front + body.replace(h1, `# ${title}`) : null;
+      });
+    }
 
     // 2. The file.
     const dir = dirname(rel);
     const existing = new Set(this.#index.paths());
-    const slug = uniqueName(slugify(title), (candidate) => {
-      const p = `${dir}/${candidate}.md`;
-      return p !== rel && existing.has(p);
-    });
-    const newRel = `${dir}/${slug}.md`;
+    const newRel = whiteboard
+      ? this.#freeWhiteboardPath(dir, whiteboardFileStem(title), rel)
+      : `${dir}/${uniqueName(slugify(title), (candidate) => {
+          const p = `${dir}/${candidate}.md`;
+          return p !== rel && existing.has(p);
+        })}.md`;
     if (newRel !== rel) {
       await this.#store.move(rel, newRel);
-      const doc = await this.#store.read(newRel);
+      const doc = await this.#read(newRel);
       this.#index.remove(rel);
       this.#events.emit({ type: 'deleted', path: rel });
       if (doc.hash) this.#afterWrite(newRel, doc.content, doc.hash);
@@ -277,7 +315,7 @@ export class NoteService {
 
     // 2b. Files named after the note go with it: a paper's highlights, the reading view's comments.
     const moved = new Map<string, string>();
-    if (newRel !== rel) {
+    if (newRel !== rel && !whiteboard) {
       for (const suffix of ['.highlights.json', '.comments.md']) {
         const from = rel.replace(/\.md$/i, suffix);
         const to = newRel.replace(/\.md$/i, suffix);
@@ -298,7 +336,7 @@ export class NoteService {
       if (src === rel || src === newRel) continue;
       let changed = false;
       await this.#edit(src, (content) => {
-        const next = rewriteLinks(content, src, oldKeys, title, newRel);
+        const next = rewriteLinks(content, src, oldKeys, whiteboard ? whiteboardName(newRel) : title, newRel);
         changed = next !== null;
         return next;
       });
@@ -313,7 +351,8 @@ export class NoteService {
     const dir = dirname(rel);
     const stem = stemOf(rel);
     let target = `trash/${rel}`;
-    for (let n = 2; await this.#store.exists(target); n++) target = `trash/${dir}/${stem}-${n}.md`;
+    const ext = isWhiteboardPath(rel) ? '.excalidraw' : '.md';
+    for (let n = 2; await this.#store.exists(target); n++) target = `trash/${dir}/${stem}-${n}${ext}`;
     await this.#store.move(rel, target);
     this.#index.remove(rel);
     this.#events.emit({ type: 'deleted', path: rel });
@@ -415,7 +454,7 @@ export function rewriteLinks(content: string, src: string, oldKeys: Set<string>,
   for (const link of links) {
     if (link.kind === 'wiki' && oldKeys.has(linkKey(link.target))) {
       const usesPath = link.target.includes('/');
-      const target = usesPath ? newRel.replace(/\.md$/i, '') : newTitle;
+      const target = usesPath ? newRel.replace(/\.(md|excalidraw)$/i, '') : newTitle;
       const inner = `${target}${link.heading ? `#${link.heading}` : ''}${link.label ? `|${link.label}` : ''}`;
       edits.push({ from: link.from, to: link.to, text: `[[${inner}]]` });
     } else if (link.kind === 'md' && oldKeys.has(linkKey(join(srcDir, link.target)))) {

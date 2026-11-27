@@ -176,6 +176,35 @@ describe('syncing with Dropbox', () => {
     expect(onA.versions.map((v) => v.version)).toEqual(history.versions.map((v) => v.version));
   });
 
+  it('keeps both drawings when a whiteboard changed on two devices', async () => {
+    const board = (text: string) => `${JSON.stringify({ type: 'excalidraw', version: 2, elements: [{ id: 't', type: 'text', text, originalText: text }], appState: {}, files: {} })}\n`;
+    const rel = 'whiteboards/Plan.excalidraw';
+    const dropbox = new FakeDropbox();
+    const a = await device(dropbox, { [rel]: board('first') });
+    await sync(a);
+    const b = await device(dropbox);
+    await sync(b);
+    const saveBoard = async (s: TestServer, text: string) => {
+      const doc = (await (await s.get(`/api/whiteboard?path=${encodeURIComponent(rel)}`)).json()) as { hash: string | null };
+      expect((await s.put('/api/whiteboard', { path: rel, content: board(text), baseHash: doc.hash })).status).toBe(200);
+    };
+    await saveBoard(a, 'drawn on a');
+    await sync(a);
+    await saveBoard(b, 'drawn on b, earlier');
+    await age(b, rel, Date.now() - 600_000);
+    const status = await sync(b);
+    expect(await b.read(rel)).toBe(board('drawn on a'));
+    expect(status.conflicts.map((c) => c.path)).toEqual([rel]);
+    const copies = (await fs.readdir(path.join(b.dir, 'whiteboards'))).filter((f) => f.startsWith('Plan (other device '));
+    expect(copies).toHaveLength(1);
+    expect(copies[0]).toMatch(/\.excalidraw$/);
+    expect(await b.read(`whiteboards/${copies[0]}`)).toBe(board('drawn on b, earlier'));
+    // The copy reaches the other device too.
+    await sync(b);
+    await sync(a);
+    expect(await exists(a, `whiteboards/${copies[0]}`)).toBe(true);
+  });
+
   it('lets a change win over a deletion, both ways', async () => {
     const dropbox = new FakeDropbox();
     const a = await device(dropbox, { 'notes/a.md': note('one'), 'notes/b.md': '# B\n' });

@@ -298,7 +298,7 @@ export function linkKey(value: string): string {
   return value
     .normalize('NFC')
     .trim()
-    .replace(/\.md$/i, '')
+    .replace(/\.(md|excalidraw)$/i, '')
     .replace(/\s+/g, ' ')
     .toLowerCase();
 }

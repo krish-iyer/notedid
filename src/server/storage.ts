@@ -11,6 +11,10 @@ const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 export const NOTE_EXTENSIONS = ['.md'] as const;
 export const DATA_EXTENSIONS = ['.json'] as const;
 export const FILE_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'] as const;
+/** Whiteboards: Excalidraw's own files (src/shared/whiteboards.ts). */
+export const WHITEBOARD_EXTENSIONS = ['.excalidraw'] as const;
+/** What the index holds: notes, and whiteboards. */
+export const INDEXED_EXTENSIONS = [...NOTE_EXTENSIONS, ...WHITEBOARD_EXTENSIONS] as const;
 
 /** The path is not acceptable. */
 export class PathError extends Error {
@@ -68,6 +72,11 @@ export function normalizePath(input: unknown, extensions: readonly string[]): st
 /** A note path: a `.md` file. */
 export function normalizeNotePath(input: unknown): string {
   return normalizePath(input, NOTE_EXTENSIONS);
+}
+
+/** A path the index holds: a note or a whiteboard. */
+export function normalizeIndexedPath(input: unknown): string {
+  return normalizePath(input, INDEXED_EXTENSIONS);
 }
 
 /**

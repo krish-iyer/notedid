@@ -1,7 +1,7 @@
 import { unzipSync, type Zippable, zipSync } from 'fflate';
 import type { Disk } from './disk.ts';
 import { SettingsStore } from './settings.ts';
-import { DATA_EXTENSIONS, FILE_EXTENSIONS, NOTE_EXTENSIONS, normalizePath, PathError } from './storage.ts';
+import { DATA_EXTENSIONS, FILE_EXTENSIONS, NOTE_EXTENSIONS, normalizePath, PathError, WHITEBOARD_EXTENSIONS } from './storage.ts';
 import { HISTORY_FOLDER, isVersionFile } from './versions.ts';
 
 /**
@@ -14,7 +14,7 @@ const APP_FOLDERS = new Set(['notes', 'journal', 'papers', 'boards', 'dashboards
 /** Formats that are compressed already: stored as they are. */
 const COMPRESSED = /\.(pdf|png|jpe?g|gif|webp)$/i;
 const VAULT_FILE = /^vault\/(key\.json|[0-9a-f]{32}\.bin|trash\/[0-9a-f]{32}-\d+\.bin)$/;
-const EXTENSIONS = [...NOTE_EXTENSIONS, ...DATA_EXTENSIONS, ...FILE_EXTENSIONS];
+const EXTENSIONS = [...NOTE_EXTENSIONS, ...DATA_EXTENSIONS, ...FILE_EXTENSIONS, ...WHITEBOARD_EXTENSIONS];
 
 /** Every file in the notes folder: notes, PDFs and pictures, data, the trash, the vault (still encrypted), the settings and the notes' versions. */
 export async function exportZip(disk: Disk): Promise<Uint8Array> {

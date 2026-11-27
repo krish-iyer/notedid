@@ -7,6 +7,7 @@ import { newDashboardContent } from '../shared/dashboard.ts';
 import { addDays, isISODate, localISODate } from '../shared/dates.ts';
 import { parseQuery } from '../shared/query.ts';
 import { slugify, tagify } from '../shared/slug.ts';
+import { isWhiteboardContent } from '../shared/whiteboards.ts';
 import { exportZip, importZip } from './archive.ts';
 import { DropboxError } from './dropbox.ts';
 import { addExamples, removeExamples } from './examples.ts';
@@ -17,7 +18,7 @@ import { basename, extname } from './posixPath.ts';
 import { NotFoundError, type NoteService } from './notes.ts';
 import { type PaperService, UpstreamError } from './papers.ts';
 import type { SettingsStore } from './settings.ts';
-import { ConflictError, DATA_EXTENSIONS, EncodingError, FILE_EXTENSIONS, type NoteStore, normalizeNotePath, normalizePath, PathError } from './storage.ts';
+import { ConflictError, DATA_EXTENSIONS, EncodingError, FILE_EXTENSIONS, type NoteStore, normalizeIndexedPath, normalizeNotePath, normalizePath, PathError, WHITEBOARD_EXTENSIONS } from './storage.ts';
 import { NotConnected, type SyncService } from './sync.ts';
 import { VaultConflict, type VaultStore } from './vault.ts';
 import type { VersionHistory } from './versions.ts';
@@ -141,14 +142,35 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     return c.json({ path: await ctx.notes.create(body.title, body.folder ?? 'notes') });
   });
 
+  // Renaming and deleting work the same for notes and whiteboards.
   app.post('/api/note/rename', smallBody, async (c) => {
     const body = await jsonBody<{ path: string; title: string }>(c, { path: 'string', title: 'string' });
-    return c.json(await ctx.notes.rename(normalizeNotePath(body.path), body.title));
+    return c.json(await ctx.notes.rename(normalizeIndexedPath(body.path), body.title));
   });
 
   app.post('/api/note/delete', smallBody, async (c) => {
     const body = await jsonBody<{ path: string }>(c, { path: 'string' });
-    return c.json({ trashPath: await ctx.notes.remove(normalizeNotePath(body.path)) });
+    return c.json({ trashPath: await ctx.notes.remove(normalizeIndexedPath(body.path)) });
+  });
+
+  // ---- Whiteboards: Excalidraw's own files (src/shared/whiteboards.ts) ----------------------------
+
+  app.get('/api/whiteboard', async (c) => {
+    const rel = normalizePath(c.req.query('path'), WHITEBOARD_EXTENSIONS);
+    return c.json(await ctx.store.readText(rel));
+  });
+
+  // A drawing with pictures on it holds them, so it can be large.
+  app.put('/api/whiteboard', bodyLimit({ maxSize: 50 * MB, onError: (c) => c.json({ error: 'The whiteboard is larger than 50 MB' } satisfies ErrorResponse, 413) }), async (c) => {
+    const body = await jsonBody<{ path: string; content: string; baseHash: string | null }>(c, { path: 'string', content: 'string', baseHash: 'string|null' });
+    const rel = normalizePath(body.path, WHITEBOARD_EXTENSIONS);
+    if (!isWhiteboardContent(body.content)) throw new BadRequest('That isn’t an Excalidraw drawing');
+    return c.json(await ctx.notes.save(rel, body.content, body.baseHash));
+  });
+
+  app.post('/api/whiteboard/create', smallBody, async (c) => {
+    const body = await jsonBody<{ title: string }>(c, { title: 'string' });
+    return c.json({ path: await ctx.notes.createWhiteboard(body.title) });
   });
 
   app.post('/api/note/restore', smallBody, async (c) => {
@@ -169,7 +191,7 @@ export function createApp(ctx: AppContext, options: AppOptions): Hono {
     return c.json(ctx.index.search(parseQuery(c.req.query('q') ?? '', today), { today, pinned }));
   });
 
-  app.get('/api/backlinks', (c) => c.json(ctx.index.backlinks(normalizeNotePath(c.req.query('path')))));
+  app.get('/api/backlinks', (c) => c.json(ctx.index.backlinks(normalizeIndexedPath(c.req.query('path')))));
 
   app.post('/api/link-mention', smallBody, async (c) => {
     const body = await jsonBody<{ path: string; line: number; term: string; target: string }>(c, { path: 'string', line: 'number', term: 'string', target: 'string' });

@@ -34,7 +34,7 @@ export interface ErrorResponse {
   error: string;
 }
 
-export type NoteKind = 'journal' | 'note' | 'paper' | 'board' | 'dashboard' | 'comments';
+export type NoteKind = 'journal' | 'note' | 'paper' | 'board' | 'dashboard' | 'comments' | 'whiteboard';
 
 /** What the index knows about a note; enough for lists, the switcher, cards and links. */
 export interface NoteSummary {
