@@ -21,6 +21,9 @@ const DashboardsPage = lazy(() => import('./pages/DashboardPage.tsx').then((m) =
 const DashboardPage = lazy(() => import('./pages/DashboardPage.tsx').then((m) => ({ default: m.DashboardPage })));
 const VaultPage = lazy(() => import('./pages/VaultPage.tsx').then((m) => ({ default: m.VaultPage })));
 const SyncPage = lazy(() => import('./pages/SyncPage.tsx').then((m) => ({ default: m.SyncPage })));
+// Excalidraw is large: it loads with the first whiteboard opened.
+const WhiteboardsPage = lazy(() => import('./pages/WhiteboardsPage.tsx').then((m) => ({ default: m.WhiteboardsPage })));
+const WhiteboardPage = lazy(() => import('./pages/WhiteboardPage.tsx').then((m) => ({ default: m.WhiteboardPage })));
 
 function Screen({ route }: { route: Route }) {
   const today = useToday();
@@ -55,6 +58,10 @@ function Screen({ route }: { route: Route }) {
       return <VaultPage />;
     case 'sync':
       return <SyncPage />;
+    case 'whiteboards':
+      return <WhiteboardsPage />;
+    case 'whiteboard':
+      return <WhiteboardPage key={route.path} path={route.path} frame={route.frame} />;
     default:
       return <NotFoundPage />;
   }

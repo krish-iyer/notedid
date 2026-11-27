@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { NoteSummary } from '../../shared/api.ts';
 import { fuzzyFilter, type FuzzyMatch } from '../../shared/fuzzy.ts';
-import { addExampleNotes, captureToToday, createBoard, createDashboard, createNote, exportNotes, giveNotesIds, importNotes, removeExampleNotes } from '../actions.ts';
+import { addExampleNotes, captureToToday, createBoard, createDashboard, createNote, createWhiteboard, exportNotes, giveNotesIds, importNotes, removeExampleNotes } from '../actions.ts';
 import { useRecentVisits } from '../recent.ts';
 import { syncNow } from '../sync.ts';
 import { navigate, noteHref } from '../router.ts';
@@ -22,6 +22,7 @@ const PAGES: { label: string; to: string; icon: IconName }[] = [
   { label: 'Papers', to: '/papers', icon: 'paper' },
   { label: 'Boards', to: '/boards', icon: 'board' },
   { label: 'Dashboards', to: '/dashboards', icon: 'dashboard' },
+  { label: 'Whiteboards', to: '/whiteboards', icon: 'whiteboard' },
   { label: 'Vault', to: '/vault', icon: 'vault' },
 ];
 
@@ -68,6 +69,7 @@ export function Switcher({ onClose }: { onClose: () => void }) {
         ...PAGES.map((p): Item => ({ kind: 'action', id: p.to, icon: p.icon, label: p.label, run: () => navigate(p.to) })),
         { kind: 'action', id: 'new-board', icon: 'board', label: 'New project board', run: () => void createBoard() },
         { kind: 'action', id: 'new-dashboard', icon: 'dashboard', label: 'New dashboard', run: () => void createDashboard() },
+        { kind: 'action', id: 'new-whiteboard', icon: 'whiteboard', label: 'New whiteboard', run: () => void createWhiteboard() },
         { kind: 'action', id: 'theme-light', icon: 'sun', label: 'Theme: light', run: () => setTheme('light') },
         { kind: 'action', id: 'theme-dark', icon: 'moon', label: 'Theme: dark', run: () => setTheme('dark') },
         { kind: 'action', id: 'theme-auto', icon: 'auto', label: 'Theme: follow the system', run: () => setTheme('auto') },
@@ -160,7 +162,7 @@ export function Switcher({ onClose }: { onClose: () => void }) {
             >
               {item.kind === 'note' ? (
                 <>
-                  <Icon name={item.note.kind === 'journal' ? 'today' : item.note.kind === 'paper' ? 'paper' : item.note.kind === 'board' ? 'board' : item.note.kind === 'dashboard' ? 'dashboard' : 'notes'} size={16} />
+                  <Icon name={item.note.kind === 'journal' ? 'today' : item.note.kind === 'paper' ? 'paper' : item.note.kind === 'board' ? 'board' : item.note.kind === 'dashboard' ? 'dashboard' : item.note.kind === 'whiteboard' ? 'whiteboard' : 'notes'} size={16} />
                   <span className="switcher-title">{item.match ? <Matched text={noteLabel(item.note)} indices={item.match.indices} /> : noteLabel(item.note)}</span>
                   <span className="switcher-hint">{item.note.path.split('/')[0]}</span>
                 </>

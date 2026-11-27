@@ -1,12 +1,13 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { DEFAULT_PORT, DEFAULT_WEB_PORT, parsePort } from './src/server/config.ts';
+import { excalidrawFonts } from './vite.excalidraw.ts';
 
 const apiPort = parsePort('PORT', process.env.PORT, DEFAULT_PORT);
 const webPort = parsePort('WEB_PORT', process.env.WEB_PORT, DEFAULT_WEB_PORT);
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), excalidrawFonts()],
   // This is the app with its server; vite.browser.config.ts builds the one that runs in a browser alone.
   define: { __BROWSER_APP__: 'false' },
   build: {

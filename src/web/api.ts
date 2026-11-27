@@ -102,6 +102,17 @@ export const api = {
   createNote: (title: string, folder = 'notes') => call<{ path: string }>('POST', '/api/note/create', { title, folder }),
   createDashboard: (title: string) => call<{ path: string }>('POST', '/api/note/create', { title, kind: 'dashboard' }),
   createBoard: (title: string, tag: string) => call<{ path: string }>('POST', '/api/note/create', { title, kind: 'board', tag }),
+  // Whiteboards: Excalidraw's files, read and saved as their text (src/shared/whiteboards.ts).
+  createWhiteboard: (title: string) => call<{ path: string }>('POST', '/api/whiteboard/create', { title }),
+  whiteboard: (path: string) => call<NoteDoc>('GET', `/api/whiteboard?path=${q(path)}`),
+  saveWhiteboard: async (path: string, content: string, baseHash: string | null): Promise<SaveNoteResponse> => {
+    try {
+      return await call<SaveNoteResponse>('PUT', '/api/whiteboard', { path, content, baseHash });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) throw new SaveConflict((err.body as ConflictResponse).current);
+      throw err;
+    }
+  },
   noteIdStatus: () => call<{ notes: number; missing: number; copies: number }>('GET', '/api/ids'),
   importNotes: (zip: Blob) => call<{ added: number; same: number; kept: string[]; skipped: string[] }>('POST', '/api/import', zip, { headers: { 'content-type': 'application/zip' } }),
   assignNoteIds: () => call<{ added: number; renewed: number }>('POST', '/api/ids'),

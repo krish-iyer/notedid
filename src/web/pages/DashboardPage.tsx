@@ -1,8 +1,9 @@
-import { type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type DragEvent as ReactDragEvent, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { NoteSummary } from '../../shared/api.ts';
 import { addCard, addCluster, type Board, type BoardCard, type BoardCluster, cardLine, cardsOf, moveCard, parseBoard, removeCard, renameCluster, serializeBoard } from '../../shared/board.ts';
 import { itemCount, itemWidth, moveTab, removeTab, setItemWidth } from '../../shared/dashboard.ts';
 import { fuzzyFilter } from '../../shared/fuzzy.ts';
+import { parseWikiTarget } from '../../shared/markdown.ts';
 import { tagify } from '../../shared/slug.ts';
 import { cardTargetFor, createDashboard } from '../actions.ts';
 import { api } from '../api.ts';
@@ -20,6 +21,9 @@ import { messageOf, timeAgo } from '../util.ts';
 import { BoardPage, PAPER_ID } from './BoardPage.tsx';
 import { PaperPage } from './PaperPage.tsx';
 
+// Excalidraw is large: it loads with the first whiteboard shown.
+const WhiteboardPage = lazy(() => import('./WhiteboardPage.tsx'));
+
 /*
  * A dashboard: named tabs, each holding notes, PDFs (papers) and boards that open right there, so
  * one project's material sits on one screen. It is a markdown file like a board: each ## heading
@@ -28,6 +32,7 @@ import { PaperPage } from './PaperPage.tsx';
 
 function iconFor(kind: string | undefined): IconName {
   if (kind === 'paper') return 'paper';
+  if (kind === 'whiteboard') return 'whiteboard';
   if (kind === 'board') return 'board';
   if (kind === 'dashboard') return 'dashboard';
   if (kind === 'journal') return 'today';
@@ -86,17 +91,19 @@ export function DashboardsPage() {
   );
 }
 
-type AddKind = 'note' | 'pdf' | 'board';
+type AddKind = 'note' | 'pdf' | 'board' | 'whiteboard';
 
 const ADD_KINDS: { kind: AddKind; label: string; icon: IconName }[] = [
   { kind: 'note', label: 'Note', icon: 'notes' },
   { kind: 'pdf', label: 'PDF', icon: 'paper' },
   { kind: 'board', label: 'Board', icon: 'board' },
+  { kind: 'whiteboard', label: 'Whiteboard', icon: 'whiteboard' },
 ];
 
 function matchesKind(n: NoteSummary, kind: AddKind): boolean {
   if (kind === 'pdf') return n.kind === 'paper';
   if (kind === 'board') return n.kind === 'board';
+  if (kind === 'whiteboard') return n.kind === 'whiteboard';
   return n.kind === 'note' || n.kind === 'journal';
 }
 
@@ -117,7 +124,7 @@ function AddItem({ kind, exclude, onAdd, onClose }: { kind: AddKind; exclude: Se
     [candidates, q],
   );
   const exact = results.some((n) => labelOf(n).toLowerCase() === q.toLowerCase());
-  const createLabel = !q || exact ? null : kind === 'pdf' ? (PAPER_ID.test(q) ? `Import ${q}` : null) : kind === 'board' ? `Create board “${q}”` : `Create note “${q}”`;
+  const createLabel = !q || exact ? null : kind === 'pdf' ? (PAPER_ID.test(q) ? `Import ${q}` : null) : kind === 'board' ? `Create board “${q}”` : kind === 'whiteboard' ? `Create whiteboard “${q}”` : `Create note “${q}”`;
   const options: Option[] = [...results.map((note): Option => ({ type: 'note', note })), ...(createLabel ? [{ type: 'create', label: createLabel } as const] : [])];
 
   useEffect(() => setActive(0), [q]);
@@ -149,6 +156,7 @@ function AddItem({ kind, exclude, onAdd, onClose }: { kind: AddKind; exclude: Se
         return addNew(result.path);
       }
       if (kind === 'board') return addNew((await api.createBoard(q, tagify(q))).path);
+      if (kind === 'whiteboard') return addNew((await api.createWhiteboard(q)).path);
       return addNew((await api.createNote(q)).path);
     });
 
@@ -163,7 +171,8 @@ function AddItem({ kind, exclude, onAdd, onClose }: { kind: AddKind; exclude: Se
     else void create();
   };
 
-  const placeholder = kind === 'pdf' ? 'Find a paper, or paste an arXiv link or DOI' : kind === 'board' ? 'Find a board, or name a new one' : 'Find a note, or type a new title';
+  const placeholder =
+    kind === 'pdf' ? 'Find a paper, or paste an arXiv link or DOI' : kind === 'board' ? 'Find a board, or name a new one' : kind === 'whiteboard' ? 'Find a whiteboard, or name a new one' : 'Find a note, or type a new title';
   return (
     <div className="dash-add">
       <div className="dash-add-row">
@@ -275,8 +284,8 @@ function Panel(props: {
   const collapsedKey = `notesapp-dash-collapsed:${dashPath}:${card.target ?? card.text}`;
   const [collapsed, setCollapsed] = useState(() => readStored(collapsedKey) === '1');
   const kind = target?.kind ?? (card.kind === 'note' ? 'missing' : card.kind);
-  // Notes start half width, papers and boards full width; {full} or {half} after the link changes that.
-  const fullByDefault = kind === 'paper' || kind === 'board';
+  // Notes start half width, papers, boards and whiteboards full width; {full} or {half} after the link changes that.
+  const fullByDefault = kind === 'paper' || kind === 'board' || kind === 'whiteboard';
   const chosen = itemWidth(card);
   const wide = chosen ? chosen === 'full' : fullByDefault;
   const toggleWidth = () => onApply((d) => setItemWidth(d, card.id, wide === fullByDefault ? (wide ? 'half' : 'full') : null));
@@ -312,6 +321,15 @@ function Panel(props: {
     if (!target) return <p className="muted dash-text">There’s no note called “{card.target}”. It may have been renamed or deleted.</p>;
     if (target.kind === 'paper') return <PaperPage path={target.path} page={null} highlight={null} embedded />;
     if (target.kind === 'board') return <BoardPage path={target.path} embedded />;
+    if (target.kind === 'whiteboard') {
+      // [[Whiteboard#Frame]]: the whiteboard, on that frame.
+      const inner = /\[\[([^\]]+)\]\]/.exec(card.text)?.[1];
+      return (
+        <Suspense fallback={<p className="muted dash-text">Opening the whiteboard…</p>}>
+          <WhiteboardPage path={target.path} frame={inner ? parseWikiTarget(inner).heading : null} embedded />
+        </Suspense>
+      );
+    }
     if (target.kind === 'dashboard') {
       return (
         <p className="dash-text">

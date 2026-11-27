@@ -48,6 +48,7 @@ export function visitedPath(route: Route, today: string): string | null {
     case 'read':
     case 'board':
     case 'dashboard':
+    case 'whiteboard':
       return route.path;
     case 'day':
       return route.date === today ? null : journalPath(route.date);

@@ -169,12 +169,23 @@ A few things differ in the browser-only app:
 
 - **Dashboards** in the sidebar → **New dashboard**. Ctrl+K understands `New dashboard` too.
 - **+ New tab** adds a named tab. Double-click a tab, or use its menu, to rename it, move it left or right, or delete it. Deleting a tab removes only the links; the notes stay.
-- In a tab, **Add Note**, **Add PDF** and **Add Board** each open a search. Pick an existing one or make a new one: a new note, an uploaded PDF, a paper imported from an arXiv link or DOI, or a new board.
+- In a tab, **Add Note**, **Add PDF**, **Add Board** and **Add Whiteboard** each open a search. Pick an existing one or make a new one: a new note, an uploaded PDF, a paper imported from an arXiv link or DOI, or a new board.
 - Notes open as editors, papers with their PDF, comments and review notes, and boards with their clusters. Each item's title opens it on its own page and ▾ folds it.
-- **Width:** ↔ switches an item between half and full width. Notes start half width (two side by side), papers and boards full width. Two papers at half width sit side by side for comparing. The choice is saved in the file as `{full}` or `{half}` after the link.
+- **Width:** ↔ switches an item between half and full width. Notes start half width (two side by side), papers, boards and whiteboards full width. Two papers at half width sit side by side for comparing. The choice is saved in the file as `{full}` or `{half}` after the link.
 - **Order:** drag an item by its ⋮⋮ handle and drop it before or after another, or onto another tab's name to move it there. The item's menu also has **Move up**, **Move down**, **Move to** another tab and **Remove** (with Undo). Items flow like text: left to right, then down.
 - The board icon on a note or paper page can also add it to a dashboard tab.
 - It's a markdown file in `dashboards/`: each `## heading` is a tab and each `- [[link]]` an item. The **Text** view shows it.
+
+**Whiteboards.** Drawings and diagrams, made with [Excalidraw](https://github.com/excalidraw/excalidraw) right in the app.
+
+- **Whiteboards** in the sidebar → **New whiteboard**; Ctrl+K understands `New whiteboard` too. Each is Excalidraw's own file, `whiteboards/<name>.excalidraw`, which the Excalidraw app opens too, and a `.excalidraw` file you put in the notes folder shows up here.
+- It saves a moment after each change. A change made elsewhere (another window, another device through sync) comes in shape by shape, the newer of each kept. If two devices change it at the same time, the other version is kept beside it as a copy.
+- **Frames** (the frame tool, or F) mark out the diagrams on a board. Name a frame (double-click its title) to link to it: `[[Whiteboard#Frame]]` in a note opens the whiteboard zoomed to that frame. **Link**, at the top of a whiteboard, lists its frames and copies a link to any of them, or to the whole board.
+- A shape can link to a note too: set its link to `[[Note]]`.
+- Search finds the text written on whiteboards, and `[[links]]` and `#tags` in that text count, as backlinks and tags.
+- In a dashboard, **Add Whiteboard** puts one in a tab, and `- [[Whiteboard#Frame]]` shows it on that frame.
+- **Export** is Excalidraw's: its menu (☰) → **Export image** saves a PNG or an SVG, or copies it; select a frame first to export only that diagram. **Save to** downloads the .excalidraw file.
+- Excalidraw's fonts come with the app, so whiteboards work offline too. They have no History of their own; the git backup and Dropbox keep their past.
 
 **Vault.**
 

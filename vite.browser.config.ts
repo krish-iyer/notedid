@@ -1,6 +1,7 @@
 import { copyFileSync } from 'node:fs';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
+import { excalidrawFonts } from './vite.excalidraw.ts';
 
 /**
  * The browser-only app: the same web app, plus a service worker (vite.sw.config.ts, built right
@@ -26,7 +27,7 @@ const notFoundPage: Plugin = {
 
 export default defineConfig({
   base: BASE,
-  plugins: [react(), notFoundPage],
+  plugins: [react(), notFoundPage, excalidrawFonts()],
   define: { __BROWSER_APP__: 'true' },
   build: {
     outDir: OUT,

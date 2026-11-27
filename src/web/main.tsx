@@ -2,8 +2,14 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { startServiceWorker } from './browserApp.ts';
+import { appUrl } from './router.ts';
 import { startSync } from './sync.ts';
 import './styles.css';
+
+// Whiteboards draw with fonts that come with the app (vite.excalidraw.ts puts them in excalidraw/fonts/):
+// offline, and in the desktop app, which loads nothing from the web. A whole address: given a path,
+// Excalidraw makes one with location.origin, which the desktop app's own scheme (notedid://) doesn't give.
+(window as unknown as { EXCALIDRAW_ASSET_PATH: string }).EXCALIDRAW_ASSET_PATH = new URL(appUrl('/excalidraw/'), location.href).href;
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root element');

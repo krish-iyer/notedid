@@ -3,6 +3,7 @@ import { formatCapture } from '../shared/capture.ts';
 import { journalPath, localISODate, localTime, localTimestamp } from '../shared/dates.ts';
 import { EXAMPLES_START } from '../shared/examples.ts';
 import { tagify } from '../shared/slug.ts';
+import { isWhiteboardPath } from '../shared/whiteboards.ts';
 import { api, fetchNote, SaveConflict, saveNote } from './api.ts';
 import { askConfirm, askText } from './dialogs.ts';
 import { appendToEditor } from './editor/registry.ts';
@@ -34,6 +35,18 @@ export async function createDashboard(): Promise<void> {
     navigate(noteHref(path, 'dashboard'));
   } catch (err) {
     showToast(`Could not create the dashboard: ${messageOf(err)}`, 'error');
+  }
+}
+
+export async function createWhiteboard(): Promise<void> {
+  const title = await askText({ title: 'New whiteboard', message: 'Its name is its file’s name too, in the whiteboards folder.', placeholder: 'Name, e.g. System design', confirmLabel: 'Create' });
+  if (!title) return;
+  try {
+    const { path } = await api.createWhiteboard(title);
+    await refreshNotes();
+    navigate(noteHref(path, 'whiteboard'));
+  } catch (err) {
+    showToast(`Could not create the whiteboard: ${messageOf(err)}`, 'error');
   }
 }
 
@@ -70,7 +83,8 @@ export async function captureToToday(text: string): Promise<void> {
 }
 
 export async function renameNote(path: string, currentTitle: string): Promise<void> {
-  const title = await askText({ title: 'Rename note', initial: currentTitle, confirmLabel: 'Rename', message: 'Links to this note in other notes are updated too.' });
+  const noun = isWhiteboardPath(path) ? 'whiteboard' : 'note';
+  const title = await askText({ title: `Rename ${noun}`, initial: currentTitle, confirmLabel: 'Rename', message: `Links to this ${noun} in other notes are updated too.` });
   if (!title || title === currentTitle) return;
   try {
     const result = await api.renameNote(path, title);
@@ -83,12 +97,13 @@ export async function renameNote(path: string, currentTitle: string): Promise<vo
 }
 
 export async function deleteNote(path: string, title: string): Promise<void> {
-  const ok = await askConfirm({ title: `Delete “${title}”?`, message: 'It moves to the trash folder in your notes, and stays in the history.', confirmLabel: 'Delete', danger: true });
+  const whiteboard = isWhiteboardPath(path);
+  const ok = await askConfirm({ title: `Delete “${title}”?`, message: whiteboard ? 'It moves to the trash folder in your notes.' : 'It moves to the trash folder in your notes, and stays in the history.', confirmLabel: 'Delete', danger: true });
   if (!ok) return;
   try {
     await api.deleteNote(path);
     await refreshNotes();
-    navigate('/notes', { replace: true });
+    navigate(whiteboard ? '/whiteboards' : '/notes', { replace: true });
     showToast(`Deleted “${title}”`);
   } catch (err) {
     showToast(`Could not delete: ${messageOf(err)}`, 'error');

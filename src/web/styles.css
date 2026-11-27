@@ -4520,3 +4520,107 @@ button.tag-chip:hover:not(:disabled) {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+/* ---------- Whiteboards (Excalidraw) ---------- */
+/* The whiteboard fills the window, and the page around it never scrolls: the canvas gets every gesture. */
+.app:has(.whiteboard-page:not(.embedded)) {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app:has(.whiteboard-page:not(.embedded)) .sidebar {
+  height: 100%;
+}
+
+.content:has(> .whiteboard-page:not(.embedded)) {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.whiteboard-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.whiteboard-page.embedded {
+  height: 100%;
+}
+
+.whiteboard-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+
+.whiteboard-head h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whiteboard-head .actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.whiteboard-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.whiteboard-message {
+  padding: 20px;
+}
+
+.whiteboard-frames {
+  width: min(320px, 86vw);
+}
+
+.whiteboard-frames ul {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+}
+
+.whiteboard-frames li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.whiteboard-excerpt {
+  margin: 2px 0 0 23px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-panel.kind-whiteboard .dash-panel-body {
+  height: 70vh;
+}
+
+@media (max-width: 600px) {
+  .whiteboard-head {
+    padding: 6px 12px;
+  }
+
+  .whiteboard-head .save-status {
+    display: none;
+  }
+}

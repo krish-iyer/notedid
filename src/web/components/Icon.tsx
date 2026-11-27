@@ -25,6 +25,7 @@ const PATHS = {
   check: 'M4 12.5l5 5L20 6.5',
   sideClose: 'M3 5h18v14H3zM15 5v14M7 9l3 3-3 3',
   panel: 'M3 5h18v14H3zM15 5v14',
+  whiteboard: 'M3 4h18v12H3zM12 16v4M8 20h8M7 12l3-3 2 2 4-4',
   widen: 'M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4',
   narrow: 'M3 12h6M15 12h6M6 9l3 3-3 3M18 9l-3 3 3 3',
   folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',

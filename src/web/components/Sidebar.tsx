@@ -28,7 +28,7 @@ function NavItem({ to, icon, label, active, badge, warn, onNavigate }: { to: str
   );
 }
 
-const KIND_ICONS: Partial<Record<NoteSummary['kind'], IconName>> = { journal: 'today', paper: 'paper', board: 'board', dashboard: 'dashboard' };
+const KIND_ICONS: Partial<Record<NoteSummary['kind'], IconName>> = { journal: 'today', paper: 'paper', board: 'board', dashboard: 'dashboard', whiteboard: 'whiteboard' };
 
 /** A note's name in the sidebar: its title, or its day for a journal page. */
 function noteName(n: NoteSummary): string {
@@ -94,6 +94,7 @@ export function Sidebar({ open, onClose, onOpenSwitcher }: { open: boolean; onCl
           <NavItem to="/papers" icon="paper" label="Papers" active={isCurrent(route, ['papers', 'paper'])} onNavigate={close} />
           <NavItem to="/boards" icon="board" label="Boards" active={isCurrent(route, ['boards', 'board'])} onNavigate={close} />
           <NavItem to="/dashboards" icon="dashboard" label="Dashboards" active={isCurrent(route, ['dashboards', 'dashboard'])} onNavigate={close} />
+          <NavItem to="/whiteboards" icon="whiteboard" label="Whiteboards" active={isCurrent(route, ['whiteboards', 'whiteboard'])} onNavigate={close} />
           <NavItem to="/vault" icon="vault" label="Vault" active={isCurrent(route, 'vault')} onNavigate={close} />
           <NavItem to="/sync" icon="sync" label={sync?.connected ? 'Sync' : 'Sync…'} active={isCurrent(route, 'sync')} warn={syncWarning(sync)} onNavigate={close} />
         </div>

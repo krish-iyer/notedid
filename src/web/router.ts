@@ -1,5 +1,6 @@
 import { createElement, type MouseEvent, type ReactNode, useMemo, useSyncExternalStore } from 'react';
 import { isISODate, journalDateOf } from '../shared/dates.ts';
+import { isWhiteboardPath } from '../shared/whiteboards.ts';
 
 /** Every screen of the app. URLs never contain ".md": /note/notes/groceries is notes/groceries.md. */
 export type Route =
@@ -18,6 +19,8 @@ export type Route =
   | { name: 'dashboard'; path: string }
   | { name: 'vault' }
   | { name: 'sync' }
+  | { name: 'whiteboards' }
+  | { name: 'whiteboard'; path: string; frame: string | null }
   | { name: 'notfound' };
 
 /**
@@ -46,16 +49,16 @@ export function currentHref(): string {
 
 export function encodeNotePath(path: string): string {
   return path
-    .replace(/\.md$/i, '')
+    .replace(/\.(md|excalidraw)$/i, '')
     .split('/')
     .map(encodeURIComponent)
     .join('/');
 }
 
-function decodeNotePath(rest: string): string | null {
+function decodeNotePath(rest: string, extension = '.md'): string | null {
   try {
     const path = rest.split('/').map(decodeURIComponent).join('/');
-    return path ? `${path}.md` : null;
+    return path ? `${path}${extension}` : null;
   } catch {
     return null;
   }
@@ -64,7 +67,7 @@ function decodeNotePath(rest: string): string | null {
 export function parseRoute(url: URL): Route {
   const p = appPath(url.pathname).replace(/\/+$/, '') || '/';
   const anchor = url.hash ? decodeURIComponent(url.hash.slice(1)) : null;
-  const under = (prefix: string) => (p.startsWith(prefix) ? decodeNotePath(p.slice(prefix.length)) : null);
+  const under = (prefix: string, extension?: string) => (p.startsWith(prefix) ? decodeNotePath(p.slice(prefix.length), extension) : null);
   if (p === '/') return { name: 'today' };
   if (p.startsWith('/day/')) {
     const date = p.slice(5);
@@ -76,6 +79,7 @@ export function parseRoute(url: URL): Route {
     '/papers': { name: 'papers' },
     '/boards': { name: 'boards' },
     '/dashboards': { name: 'dashboards' },
+    '/whiteboards': { name: 'whiteboards' },
     '/vault': { name: 'vault' },
     '/sync': { name: 'sync' },
   };
@@ -94,6 +98,9 @@ export function parseRoute(url: URL): Route {
   if (board) return { name: 'board', path: board };
   const dashboard = under('/dashboard/');
   if (dashboard) return { name: 'dashboard', path: dashboard };
+  // A whiteboard, and the frame (diagram) on it to show: /whiteboard/whiteboards/Plan#Architecture
+  const whiteboard = under('/whiteboard/', '.excalidraw');
+  if (whiteboard) return { name: 'whiteboard', path: whiteboard, frame: anchor };
   return { name: 'notfound' };
 }
 
@@ -105,6 +112,8 @@ export function noteHref(path: string, kind?: string, anchor?: string | null): s
   if (kind === 'paper') return `/paper/${encodeNotePath(path)}`;
   if (kind === 'board') return `/board/${encodeNotePath(path)}`;
   if (kind === 'dashboard') return `/dashboard/${encodeNotePath(path)}`;
+  // A whiteboard's anchor names a frame on it; a line (L12, from a backlink) means nothing there.
+  if (kind === 'whiteboard' || isWhiteboardPath(path)) return `/whiteboard/${encodeNotePath(path)}${anchor && !/^L\d+$/.test(anchor) ? hash : ''}`;
   return `/note/${encodeNotePath(path)}${hash}`;
 }
 
