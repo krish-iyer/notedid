@@ -24,7 +24,21 @@ self.addEventListener('install', (event) => {
       const cache = await caches.open(CACHE);
       // SQLite's WebAssembly comes from the worker's own build, after the list of the app's files was
       // made. Without it here, a worker started afresh away from the network couldn't open the notes.
-      await cache.addAll([...new Set([...__APP_FILES__, wasmUrl])]);
+      const files = [...new Set([...__APP_FILES__, wasmUrl])];
+      // Files named by their content (assets/index-1a2b3c.js, Excalidraw's fonts) are the same in every
+      // version that has them: those an earlier version kept are copied, so a new version only downloads
+      // what changed.
+      const earlier = await Promise.all((await caches.keys()).filter((key) => key.startsWith('notesapp-') && key !== CACHE).map((key) => caches.open(key)));
+      const download: string[] = [];
+      for (const file of files) {
+        let kept: Response | undefined;
+        if (/\/(assets|excalidraw\/fonts)\//.test(new URL(file, self.location.href).pathname)) {
+          for (const old of earlier) if ((kept = await old.match(file))) break;
+        }
+        if (kept) await cache.put(file, kept);
+        else download.push(file);
+      }
+      await cache.addAll(download);
       await self.skipWaiting();
     })(),
   );

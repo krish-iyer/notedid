@@ -9,7 +9,10 @@ export async function startServiceWorker(): Promise<void> {
   if (!('serviceWorker' in navigator)) {
     throw new Error('this browser can’t keep notes on its own here (no service workers; some private windows turn them off)');
   }
-  await navigator.serviceWorker.register(appUrl('/sw.js'), { scope: BASE });
+  const registration = await navigator.serviceWorker.register(appUrl('/sw.js'), { scope: BASE });
+  // An earlier version is in charge: look for a new one now. Browsers look on their own only now and
+  // then, and an app opened from a phone's home screen may not look at all.
+  if (navigator.serviceWorker.controller) void registration.update().catch(() => undefined);
   if (!navigator.serviceWorker.controller) {
     await new Promise<void>((resolve) => navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true }));
   }
