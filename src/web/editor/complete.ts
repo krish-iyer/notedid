@@ -1,10 +1,13 @@
 import { type Completion, type CompletionContext, type CompletionResult, startCompletion } from '@codemirror/autocomplete';
 import type { EditorView } from '@codemirror/view';
+import type { NoteSummary } from '../../shared/api.ts';
 import { addDays, localISODate, localTime } from '../../shared/dates.ts';
 import { fuzzyFilter } from '../../shared/fuzzy.ts';
-import { notesStore, tagsStore } from '../stores.ts';
+import { frameNames } from '../../shared/whiteboards.ts';
+import { api } from '../api.ts';
+import { notesStore, resolveNote, tagsStore } from '../stores.ts';
 import { insertCards } from './cards.ts';
-import { privateModeFacet } from './context.ts';
+import { notePathFacet, privateModeFacet } from './context.ts';
 import { uploadAndInsert } from './paste.ts';
 import { setAllQuotesFolded } from './quotes.ts';
 import { insertTable } from './tableEditing.ts';
@@ -15,12 +18,61 @@ function insertWikiLink(view: EditorView, from: number, to: number, title: strin
   view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length + (closed ? 2 : 0) }, userEvent: 'input.complete' });
 }
 
-/** After "[[": note titles, best match first, plus "new note" for a title that doesn't exist yet. */
-export function wikiLinkCompletion(context: CompletionContext): CompletionResult | null {
+/** A whiteboard's named frames, by its path and version: what [[Whiteboard#…]] can point at. */
+const frameLists = new Map<string, Promise<string[]>>();
+
+function framesOf(board: NoteSummary): Promise<string[]> {
+  const key = `${board.path}\n${board.mtime}`;
+  let found = frameLists.get(key);
+  if (!found) {
+    found = api.whiteboard(board.path).then(
+      (doc) => frameNames(doc.content),
+      () => {
+        frameLists.delete(key);
+        return [];
+      },
+    );
+    if (frameLists.size >= 100) frameLists.delete(frameLists.keys().next().value as string);
+    frameLists.set(key, found);
+  }
+  return found;
+}
+
+/** After "[[Whiteboard#": its frames. */
+async function frameCompletion(board: NoteSummary, typed: string, from: number): Promise<CompletionResult> {
+  const ranked = fuzzyFilter(await framesOf(board), typed, (name) => name, 40);
+  const options: Completion[] = ranked.map(({ item }) => ({ label: item, detail: 'frame', apply: (view, _completion, f, t) => insertWikiLink(view, f, t, item) }));
+  return { from, options, filter: false };
+}
+
+/** After "![[": whiteboards and their frames, to show as a picture. */
+async function pictureCompletion(typed: string, from: number): Promise<CompletionResult> {
+  const boards = (notesStore.get() ?? []).filter((n) => n.kind === 'whiteboard');
+  const frames = await Promise.all(boards.map(framesOf));
+  const choices = boards.flatMap((board, i) => [
+    { text: board.title, detail: 'whole whiteboard' },
+    ...(frames[i] ?? []).map((frame) => ({ text: `${board.title}#${frame}`, detail: 'frame' })),
+  ]);
+  const ranked = fuzzyFilter(choices, typed, (choice) => choice.text, 40);
+  const options: Completion[] = ranked.map(({ item }) => ({ label: item.text, detail: item.detail, apply: (view, _completion, f, t) => insertWikiLink(view, f, t, item.text) }));
+  return { from, options, filter: false };
+}
+
+/**
+ * After "[[": note titles, best match first, plus "new note" for a title that doesn't exist yet.
+ * After "![[": whiteboards and their frames. After "[[Whiteboard#": its frames.
+ */
+export function wikiLinkCompletion(context: CompletionContext): CompletionResult | Promise<CompletionResult | null> | null {
   const before = context.matchBefore(/\[\[[^\]\n[]*$/);
   if (!before) return null;
   const typed = before.text.slice(2);
-  if (typed.includes('|') || typed.includes('#')) return null;
+  if (typed.includes('|')) return null;
+  const hash = typed.indexOf('#');
+  if (hash >= 0) {
+    const board = resolveNote(typed.slice(0, hash), context.state.facet(notePathFacet) ?? undefined);
+    return board?.kind === 'whiteboard' ? frameCompletion(board, typed.slice(hash + 1), before.from + 3 + hash) : null;
+  }
+  if (context.state.sliceDoc(before.from - 1, before.from) === '!' && !context.state.facet(privateModeFacet)) return pictureCompletion(typed, before.from + 2);
   const notes = notesStore.get() ?? [];
   const ranked = fuzzyFilter(notes, typed, (n) => n.title, 40);
   const options: Completion[] = ranked.map(({ item }) => ({
@@ -95,6 +147,7 @@ const COMMANDS: SlashCommand[] = [
   { label: 'Code block', detail: '```', run: insertBlock(() => '```\n\n```', 5) },
   { label: 'Divider', detail: '---', run: insertBlock(() => '---') },
   { label: 'Link to note', detail: '[[ ]]', run: insertText('[[', (view) => startCompletion(view)) },
+  { label: 'Whiteboard picture', detail: '![[ ]]', needsServer: true, run: insertText('![[', (view) => startCompletion(view)) },
   { label: 'Date', detail: 'today', run: insertText(() => localISODate()) },
   { label: 'Time', detail: 'now', run: insertText(() => localTime()) },
   { label: 'Due today', detail: 'due:', run: insertText(() => `due:${localISODate()} `) },
