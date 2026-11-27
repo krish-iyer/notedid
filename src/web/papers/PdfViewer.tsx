@@ -532,7 +532,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
                     Cancel
                   </button>
                   <button type="submit" className="primary" disabled={!draft.trim()}>
-                    Save comment
+                    Save
                   </button>
                 </div>
               </form>
