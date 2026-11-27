@@ -81,6 +81,13 @@ describe('note operations', () => {
     expect(rewriteLinks('nothing here', 'a.md', keys, 'New', 'notes/new.md')).toBeNull();
   });
 
+  it('rewrites a picture of a renamed whiteboard, keeping its "!" and its frame', () => {
+    const keys = new Set(['whiteboards/plan', 'plan']);
+    expect(rewriteLinks('![[Plan#Architecture]] and [[Plan]]', 'notes/a.md', keys, 'Design', 'whiteboards/Design.excalidraw')).toBe(
+      '![[Design#Architecture]] and [[Design]]',
+    );
+  });
+
   it('ticks a task that moved down after lines were added above it', async () => {
     const s = await makeTestServer({ files: { 'notes/list.md': '- [ ] milk\n' } });
     cleanups.push(s.cleanup);

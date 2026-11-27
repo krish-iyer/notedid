@@ -1,6 +1,6 @@
 import type { SyntaxNode } from '@lezer/common';
 import { tags } from '@lezer/highlight';
-import { GFM, type MarkdownConfig, parser as commonmarkParser } from '@lezer/markdown';
+import { GFM, type InlineContext, type MarkdownConfig, parser as commonmarkParser } from '@lezer/markdown';
 import { isISODate } from './dates.ts';
 import { parseTaskMeta } from './tasks.ts';
 
@@ -12,34 +12,56 @@ import { parseTaskMeta } from './tasks.ts';
 const OPEN_BRACKET = 91; // [
 const CLOSE_BRACKET = 93; // ]
 const HASH = 35; // #
+const BANG = 33; // !
 const NEWLINE = 10;
 const SLASH = 47;
 const DASH = 45;
 
-/** [[Target]], [[Target|label]], [[Target#Heading]], [[file.pdf#page=4|p. 4]] */
+/** Where a [[...]] that starts at `pos` ends (after its "]]"), or -1 if there isn't one. */
+function wikiLinkEnd(cx: InlineContext, pos: number): number {
+  if (cx.char(pos) !== OPEN_BRACKET || cx.char(pos + 1) !== OPEN_BRACKET) return -1;
+  const end = cx.offset + cx.text.length;
+  for (let i = pos + 2; i < end; i++) {
+    const ch = cx.char(i);
+    if (ch === NEWLINE || ch === OPEN_BRACKET) return -1;
+    if (ch === CLOSE_BRACKET) return cx.char(i + 1) === CLOSE_BRACKET && i > pos + 2 ? i + 2 : -1;
+  }
+  return -1;
+}
+
+const wikiLink = (cx: InlineContext, from: number, to: number) =>
+  cx.elt('WikiLink', from, to, [cx.elt('WikiLinkMark', from, from + 2), cx.elt('WikiLinkMark', to - 2, to)]);
+
+/**
+ * [[Target]], [[Target|label]], [[Target#Heading]], [[file.pdf#page=4|p. 4]], and with a "!" in
+ * front, ![[Whiteboard#Frame]]: a picture of it (a WikiEmbed holding the WikiLink, so everything
+ * that finds links finds this one too).
+ */
 export const WikiLinkExtension: MarkdownConfig = {
   defineNodes: [
     { name: 'WikiLink', style: tags.link },
     { name: 'WikiLinkMark', style: tags.processingInstruction },
+    { name: 'WikiEmbed' },
+    { name: 'WikiEmbedMark', style: tags.processingInstruction },
   ],
   parseInline: [
+    {
+      name: 'WikiEmbed',
+      before: 'Link',
+      parse(cx, next, pos) {
+        if (next !== BANG) return -1;
+        const end = wikiLinkEnd(cx, pos + 1);
+        if (end < 0) return -1;
+        return cx.addElement(cx.elt('WikiEmbed', pos, end, [cx.elt('WikiEmbedMark', pos, pos + 1), wikiLink(cx, pos + 1, end)]));
+      },
+    },
     {
       name: 'WikiLink',
       before: 'Link',
       parse(cx, next, pos) {
-        if (next !== OPEN_BRACKET || cx.char(pos + 1) !== OPEN_BRACKET) return -1;
-        const end = cx.offset + cx.text.length;
-        for (let i = pos + 2; i < end; i++) {
-          const ch = cx.char(i);
-          if (ch === NEWLINE || ch === OPEN_BRACKET) return -1;
-          if (ch === CLOSE_BRACKET) {
-            if (cx.char(i + 1) !== CLOSE_BRACKET || i === pos + 2) return -1;
-            return cx.addElement(
-              cx.elt('WikiLink', pos, i + 2, [cx.elt('WikiLinkMark', pos, pos + 2), cx.elt('WikiLinkMark', i, i + 2)]),
-            );
-          }
-        }
-        return -1;
+        if (next !== OPEN_BRACKET) return -1;
+        const end = wikiLinkEnd(cx, pos);
+        return end < 0 ? -1 : cx.addElement(wikiLink(cx, pos, end));
       },
     },
   ],

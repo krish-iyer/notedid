@@ -95,6 +95,19 @@ describe('analyzeBody', () => {
     expect(links[0]).toMatchObject({ target: 'Target', line: 4, from: 17, to: 27 });
     expect(content.slice(17, 27)).toBe('[[Target]]');
   });
+
+  it('finds the link in a picture of a whiteboard, ![[Board#Frame]], just as in [[Board#Frame]]', () => {
+    const text = 'Here: ![[Plan#Architecture]]\n\n![[Plan]] and ![photo](a.png) and \\![[Escaped]] and `![[code]]`\n';
+    const wiki = analyzeBody(text).links.filter((l) => l.kind === 'wiki');
+    expect(wiki.map((l) => [l.target, l.heading, text.slice(l.from, l.to)])).toEqual([
+      ['Plan', 'Architecture', '[[Plan#Architecture]]'],
+      ['Plan', null, '[[Plan]]'],
+      ['Escaped', null, '[[Escaped]]'],
+    ]);
+    expect(analyzeBody(text).links.some((l) => l.kind === 'md' && l.target === 'a.png')).toBe(true);
+    // A lone "!" or "![" is still text, and ![…](…) still an image.
+    expect(analyzeBody('Wow! ![[]] ![[x').links).toEqual([]);
+  });
 });
 
 describe('linkKey', () => {
