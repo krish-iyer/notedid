@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
+import type { NoteSummary } from '../../shared/api.ts';
+import { formatDayTitle, journalPath } from '../../shared/dates.ts';
 import { createBoard, createNote, removeView } from '../actions.ts';
+import { forgetVisit, useRecentVisits } from '../recent.ts';
 import { Link, noteHref, type Route, useRoute } from '../router.ts';
 import { useNotes, useSettings, useTags } from '../stores.ts';
 import { useSyncStatus } from '../sync.ts';
@@ -25,6 +28,13 @@ function NavItem({ to, icon, label, active, badge, warn, onNavigate }: { to: str
   );
 }
 
+const KIND_ICONS: Partial<Record<NoteSummary['kind'], IconName>> = { journal: 'today', paper: 'paper', board: 'board', dashboard: 'dashboard' };
+
+/** A note's name in the sidebar: its title, or its day for a journal page. */
+function noteName(n: NoteSummary): string {
+  return n.kind === 'journal' && n.date ? formatDayTitle(n.date) : n.title;
+}
+
 /** What the sync item says needs a look, if anything. */
 function syncWarning(status: ReturnType<typeof useSyncStatus>): string | undefined {
   if (!status?.connected) return undefined;
@@ -44,9 +54,17 @@ export function Sidebar({ open, onClose, onOpenSwitcher }: { open: boolean; onCl
 
   const openTasks = useMemo(() => notes.reduce((sum, n) => sum + n.openTasks, 0), [notes]);
   const pinned = useMemo(() => (settings?.pinned ?? []).map((p) => notes.find((n) => n.path === p)).filter((n) => n !== undefined), [settings, notes]);
-  // Not journal days (Today has them), nor the paper library's collections file.
-  const recent = useMemo(() => notes.filter((n) => n.kind !== 'journal' && n.meta.type !== 'collections').slice(0, 6), [notes]);
-  const currentPath = 'path' in route ? route.path : null;
+  const currentPath = 'path' in route ? route.path : route.name === 'day' ? journalPath(route.date) : null;
+  // The notes you went to, the latest first: not the one open now, nor ones gone since, nor the
+  // files that go with another note (a document's comments, the paper library's collections).
+  const visits = useRecentVisits();
+  const recent = useMemo(() => {
+    const byPath = new Map(notes.map((n) => [n.path, n]));
+    return visits
+      .map((path) => byPath.get(path))
+      .filter((n): n is NoteSummary => n !== undefined && n.path !== currentPath && n.kind !== 'comments' && n.meta.type !== 'collections')
+      .slice(0, 6);
+  }, [notes, visits, currentPath]);
   const close = onClose;
 
   return (
@@ -84,9 +102,25 @@ export function Sidebar({ open, onClose, onOpenSwitcher }: { open: boolean; onCl
           <div className="nav-section">
             <h2>Pinned</h2>
             {pinned.map((n) => (
-              <Link key={n.path} to={noteHref(n.path, n.kind)} className={currentPath === n.path ? 'nav-sub active' : 'nav-sub'} onNavigate={close}>
-                <Icon name="pin" size={14} /> {n.kind === 'journal' ? n.date : n.title}
+              <Link key={n.path} to={noteHref(n.path, n.kind)} className={currentPath === n.path ? 'nav-sub active' : 'nav-sub'} title={noteName(n)} onNavigate={close}>
+                <Icon name="pin" size={14} /> <span className="nav-text">{noteName(n)}</span>
               </Link>
+            ))}
+          </div>
+        )}
+
+        {recent.length > 0 && (
+          <div className="nav-section">
+            <h2>Recent</h2>
+            {recent.map((n) => (
+              <div key={n.path} className="nav-sub-row recent-row">
+                <Link to={noteHref(n.path, n.kind)} className="nav-sub" title={noteName(n)} onNavigate={close}>
+                  <Icon name={KIND_ICONS[n.kind] ?? 'notes'} size={14} /> <span className="nav-text">{noteName(n)}</span>
+                </Link>
+                <button type="button" className="icon-button remove" title="Remove from Recent" aria-label={`Remove ${noteName(n)} from Recent`} onClick={() => forgetVisit(n.path)}>
+                  ×
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -122,17 +156,6 @@ export function Sidebar({ open, onClose, onOpenSwitcher }: { open: boolean; onCl
                 </button>
               )}
             </div>
-          </div>
-        )}
-
-        {recent.length > 0 && (
-          <div className="nav-section">
-            <h2>Recent</h2>
-            {recent.map((n) => (
-              <Link key={n.path} to={noteHref(n.path, n.kind)} className={currentPath === n.path ? 'nav-sub active' : 'nav-sub'} onNavigate={close}>
-                {n.title}
-              </Link>
-            ))}
           </div>
         )}
 

@@ -2,6 +2,7 @@ import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import type { NoteSummary } from '../../shared/api.ts';
 import { fuzzyFilter, type FuzzyMatch } from '../../shared/fuzzy.ts';
 import { addExampleNotes, captureToToday, createBoard, createDashboard, createNote, exportNotes, giveNotesIds, importNotes, removeExampleNotes } from '../actions.ts';
+import { useRecentVisits } from '../recent.ts';
 import { syncNow } from '../sync.ts';
 import { navigate, noteHref } from '../router.ts';
 import { useNotes } from '../stores.ts';
@@ -50,6 +51,7 @@ const SYNC: Item[] = [
 /** Ctrl+K: jump to any note, or turn what you typed into a note, a capture or a search. */
 export function Switcher({ onClose }: { onClose: () => void }) {
   const notes = useNotes();
+  const visits = useRecentVisits();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const list = useRef<HTMLUListElement>(null);
@@ -57,8 +59,12 @@ export function Switcher({ onClose }: { onClose: () => void }) {
   const items = useMemo<Item[]>(() => {
     const q = query.trim();
     if (!q) {
+      // The notes you opened lately, then the latest changed (not the files that go with another note).
+      const byPath = new Map(notes.map((n) => [n.path, n]));
+      const opened = visits.map((path) => byPath.get(path)).filter((n) => n !== undefined);
+      const first = [...new Set([...opened, ...notes])].filter((n) => n.kind !== 'comments' && n.meta.type !== 'collections').slice(0, 8);
       return [
-        ...notes.slice(0, 8).map((note): Item => ({ kind: 'note', note, match: null })),
+        ...first.map((note): Item => ({ kind: 'note', note, match: null })),
         ...PAGES.map((p): Item => ({ kind: 'action', id: p.to, icon: p.icon, label: p.label, run: () => navigate(p.to) })),
         { kind: 'action', id: 'new-board', icon: 'board', label: 'New project board', run: () => void createBoard() },
         { kind: 'action', id: 'new-dashboard', icon: 'dashboard', label: 'New dashboard', run: () => void createDashboard() },
@@ -91,7 +97,7 @@ export function Switcher({ onClose }: { onClose: () => void }) {
       { kind: 'action', id: 'search', icon: 'search', label: `Search for “${q}”`, run: () => navigate(`/search?q=${encodeURIComponent(q)}`) },
     ];
     return [...commands, ...found, ...actions];
-  }, [query, notes]);
+  }, [query, notes, visits]);
 
   useEffect(() => setSelected(0), [query]);
   useEffect(() => {

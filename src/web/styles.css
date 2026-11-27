@@ -499,6 +499,23 @@ mark {
   align-items: center;
 }
 
+/* A long name ends in "…" (the row is a flex box, so the text needs a box of its own for that). */
+.nav-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-sub > .icon {
+  flex: none;
+  color: var(--faint);
+}
+
+.nav-sub.active > .icon {
+  color: inherit;
+}
+
 .nav-sub-row .remove {
   visibility: hidden;
   min-height: 24px;
@@ -4424,6 +4441,10 @@ button.tag-chip:hover:not(:disabled) {
   .nav-sub-row .remove,
   .cm-card .cm-card-unlink {
     visibility: visible;
+  }
+  /* Recent tidies itself as you go: no × on every row of it. */
+  .recent-row .remove {
+    display: none;
   }
   .card-tools {
     display: flex;

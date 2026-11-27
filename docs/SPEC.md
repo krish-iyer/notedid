@@ -106,7 +106,7 @@ $NOTES_DIR/
 
 ## 5. Finding things
 
-- **Quick switcher (Ctrl+K).** Fuzzy title match, plus recent notes and commands.
+- **Quick switcher (Ctrl+K).** Fuzzy title match, plus recent notes and commands. With nothing typed it lists the notes you opened lately on this device (the sidebar's Recent, kept in the browser), then the latest changed.
 - **Search.** Words, `"phrases"` and `-exclusions`, combined with filters:
 
   | Filter | Example |

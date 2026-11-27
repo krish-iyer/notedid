@@ -7,6 +7,7 @@ import { Switcher } from './components/Switcher.tsx';
 import { useToday } from './hooks.ts';
 import { JournalPage, NotePage } from './pages/NotePage.tsx';
 import { NotesPage, NotFoundPage, SearchPage, TasksPage } from './pages/ListPages.tsx';
+import { recordVisit, visitedPath } from './recent.ts';
 import { navigate, type Route, useRoute } from './router.ts';
 import { startStores } from './stores.ts';
 
@@ -61,11 +62,17 @@ function Screen({ route }: { route: Route }) {
 
 export function App() {
   const route = useRoute();
+  const today = useToday();
   const [switcher, setSwitcher] = useState(false);
   const [menu, setMenu] = useState(false);
 
   useEffect(() => startStores(), []);
   useEffect(() => setMenu(false), [route]);
+  // The sidebar's Recent: the notes you open.
+  useEffect(() => {
+    const path = visitedPath(route, today);
+    if (path) recordVisit(path);
+  }, [route, today]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
