@@ -205,6 +205,8 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
   const [page, setPage] = useState(1);
   const [pending, setPending] = useState<{ selection: PdfSelection; x: number; y: number } | null>(null);
   const [writing, setWriting] = useState(false);
+  const writingRef = useRef(false);
+  writingRef.current = writing;
   const [draft, setDraft] = useState('');
   const [flash, setFlash] = useState<string | null>(null);
   const [flashRect, setFlashRect] = useState<{ page: number; rect: Rect } | null>(null);
@@ -342,18 +344,15 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
     setPage(current);
   };
 
-  const onMouseUp = (event: MouseEvent) => {
-    if ((event.target as Element).closest('.pdf-popover')) return;
+  /** The text selected in the PDF, to highlight or comment on, and where to put the menu for it; null if none. */
+  const selected = useCallback((): { selection: PdfSelection; x: number; y: number } | null => {
     const el = scroller.current;
     const selection = window.getSelection();
-    if (!el || !selection || selection.isCollapsed || selection.rangeCount === 0) {
-      if (!writing) setPending(null);
-      return;
-    }
+    if (!el || !selection || selection.isCollapsed || selection.rangeCount === 0) return null;
     const range = selection.getRangeAt(0);
     const start = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
     const pageEl = start?.closest<HTMLElement>('.pdf-page');
-    if (!pageEl || !el.contains(pageEl)) return;
+    if (!pageEl || !el.contains(pageEl)) return null;
     const box = pageEl.getBoundingClientRect();
     const rects = mergeRects(
       [...range.getClientRects()]
@@ -361,13 +360,45 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
         .map((r) => ({ x: (r.left - box.left) / box.width, y: (r.top - box.top) / box.height, w: r.width / box.width, h: r.height / box.height })),
     );
     const text = cleanSelectedText(selection.toString());
-    if (!text || rects.length === 0) return;
+    if (!text || rects.length === 0) return null;
     const end = range.getBoundingClientRect();
     const host = el.getBoundingClientRect();
+    // Below the selection: a phone shows its own Copy menu above it.
+    const x = Math.min(Math.max(8, end.left - host.left + el.scrollLeft), Math.max(8, el.scrollLeft + el.clientWidth - 260));
+    return { selection: { page: Number(pageEl.dataset.page), rects, text }, x, y: end.bottom - host.top + el.scrollTop + 6 };
+  }, []);
+
+  const offer = useCallback((next: { selection: PdfSelection; x: number; y: number }) => {
     setWriting(false);
     setDraft('');
-    setPending({ selection: { page: Number(pageEl.dataset.page), rects, text }, x: Math.max(8, end.left - host.left + el.scrollLeft), y: end.bottom - host.top + el.scrollTop + 6 });
+    setPending((current) => (current && current.selection.text === next.selection.text && current.selection.page === next.selection.page ? current : next));
+  }, []);
+
+  const onMouseUp = (event: MouseEvent) => {
+    if ((event.target as Element).closest('.pdf-popover')) return;
+    const next = selected();
+    if (next) offer(next);
+    else if (!writing) setPending(null);
   };
+
+  // A finger selects with a long press and the handles, and no mouseup comes: follow the selection itself.
+  // An emptied selection changes nothing here (tapping the menu empties it); a tap elsewhere closes the menu.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onChange = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (writingRef.current) return;
+        const next = selected();
+        if (next) offer(next);
+      }, 300);
+    };
+    document.addEventListener('selectionchange', onChange);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('selectionchange', onChange);
+    };
+  }, [selected, offer]);
 
   /** A click (not a selection) on a highlight shows its comment. */
   const onClick = (event: MouseEvent) => {

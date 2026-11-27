@@ -1,4 +1,4 @@
-import { type MouseEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type MouseEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { appendComment, commentsPathFor, type DocComment, newCommentsNote, parseComments } from '../../shared/comments.ts';
 import { splitFrontmatter } from '../../shared/markdown.ts';
 import { newNoteId, withNoteId } from '../../shared/noteIds.ts';
@@ -78,21 +78,48 @@ export function ReadPage({ path }: { path: string }) {
     comments.forEach((c, i) => markQuote(el, c.quote, i));
   }, [doc, path, comments]);
 
-  const onMouseUp = () => {
+  /** The passage selected in the note, and where to put the comment button for it; null if none. */
+  const selected = useCallback((): { quote: string; x: number; y: number } | null => {
     const selection = window.getSelection();
     const el = article.current;
-    if (!el || !selection || selection.isCollapsed || !el.contains(selection.anchorNode)) {
+    if (!el || !selection || selection.isCollapsed || selection.rangeCount === 0 || !el.contains(selection.anchorNode)) return null;
+    const quote = selection.toString().replace(/\s+/g, ' ').trim();
+    if (!quote) return null;
+    const box = selection.getRangeAt(0).getBoundingClientRect();
+    const host = el.getBoundingClientRect();
+    // Below the selection: a phone shows its own Copy menu above it.
+    return { quote, x: Math.min(Math.max(0, box.left - host.left), Math.max(0, host.width - 240)), y: box.bottom - host.top + 8 };
+  }, []);
+
+  const onMouseUp = () => {
+    const next = selected();
+    if (!next) {
       if (!writing) setPending(null);
       return;
     }
-    const quote = selection.toString().replace(/\s+/g, ' ').trim();
-    if (!quote) return;
-    const box = selection.getRangeAt(0).getBoundingClientRect();
-    const host = el.getBoundingClientRect();
-    setPending({ quote, x: box.left - host.left, y: box.bottom - host.top + 8 });
+    setPending(next);
     setWriting(false);
     setDraft('');
   };
+
+  // A finger selects with a long press and the handles, and no mouseup comes: follow the selection itself.
+  const writingRef = useRef(false);
+  writingRef.current = writing;
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onChange = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const next = writingRef.current ? null : selected();
+        if (next) setPending((current) => (current?.quote === next.quote ? current : next));
+      }, 300);
+    };
+    document.addEventListener('selectionchange', onChange);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('selectionchange', onChange);
+    };
+  }, [selected]);
 
   const save = async () => {
     if (!pending || !draft.trim()) return;
