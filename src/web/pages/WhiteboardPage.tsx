@@ -277,13 +277,21 @@ export function WhiteboardPage({ path, frame, embedded = false }: { path: string
               <button type="button" className="link-button" onClick={() => void copy(`[[${name}]]`, 'a link to the whiteboard').then(() => setFrames(null))}>
                 Copy a link to the whiteboard
               </button>
-              <p className="muted small">Or to one of its frames, which opens the whiteboard on it. Name a frame (double-click its title) to link to it.</p>
+              <button type="button" className="link-button" onClick={() => void copy(`![[${name}]]`, 'a picture of the whiteboard').then(() => setFrames(null))}>
+                Copy it as a picture, for a note
+              </button>
+              <p className="muted small">
+                Or one of its frames: <Icon name="image" size={13} /> a picture of just that frame, which a note shows and keeps up to date, or <Icon name="link" size={13} /> a link that opens the whiteboard on it. Name a frame (double-click its title) to use it.
+              </p>
               {frames.length === 0 && <p className="muted small">No named frames yet. The frame tool is in the toolbar (or press F).</p>}
               <ul>
                 {frames.map((f) => (
                   <li key={f.id}>
                     <button type="button" className="link-button" title="Show it" onClick={() => showFrame(f.id)}>
                       {f.name}
+                    </button>
+                    <button type="button" className="icon-button" title={`Copy a picture of “${f.name}”, for a note`} aria-label={`Copy a picture of ${f.name}`} onClick={() => void copy(`![[${name}#${f.name}]]`, `a picture of “${f.name}”`).then(() => setFrames(null))}>
+                      <Icon name="image" size={14} />
                     </button>
                     <button type="button" className="icon-button" title={`Copy a link to “${f.name}”`} aria-label={`Copy a link to ${f.name}`} onClick={() => void copy(`[[${name}#${f.name}]]`, `a link to “${f.name}”`).then(() => setFrames(null))}>
                       <Icon name="link" size={14} />

@@ -4602,9 +4602,23 @@ button.tag-chip:hover:not(:disabled) {
 .whiteboard-frames li {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 2px;
   min-height: 32px;
+}
+
+.whiteboard-frames li > .link-button {
+  margin-right: auto;
+  text-align: left;
+}
+
+.whiteboard-frames > .link-button {
+  display: block;
+  margin: 2px 0 6px;
+  text-align: left;
+}
+
+.whiteboard-frames p svg {
+  vertical-align: -2px;
 }
 
 .whiteboard-excerpt {
