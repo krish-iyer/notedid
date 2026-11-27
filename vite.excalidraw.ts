@@ -2,8 +2,26 @@ import { cpSync, existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { Plugin } from 'vite';
 
-/** Excalidraw's fonts, as the package ships them. */
-const FONTS = path.resolve('node_modules/@excalidraw/excalidraw/dist/prod/fonts');
+/** Excalidraw's own build, and its fonts, as the package ships them. */
+const PROD = path.resolve('node_modules/@excalidraw/excalidraw/dist/prod');
+const FONTS = path.join(PROD, 'fonts');
+
+/** The files of Excalidraw's build that its font worker loads: those subset-worker.chunk.js imports, and theirs. */
+function workerFiles(): string[] {
+  const found = new Set<string>();
+  const visit = (file: string) => {
+    for (const [, imported] of readFileSync(path.join(PROD, file), 'utf8').matchAll(/(?:from|import)\s*"\.\/([\w.-]+\.js)"/g)) {
+      if (imported && !found.has(imported)) {
+        found.add(imported);
+        visit(imported);
+      }
+    }
+  };
+  visit('subset-worker.chunk.js');
+  return [...found];
+}
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Excalidraw's fonts, served by the app itself at excalidraw/fonts/ (main.tsx points Excalidraw
@@ -17,6 +35,27 @@ export function excalidrawFonts(): Plugin {
   let base = '/';
   return {
     name: 'excalidraw-fonts',
+    // Fonts in an exported picture (a whiteboard's picture in a note, Export image) are cut down to the
+    // letters used, in a worker that loads subset-worker.chunk.js and what it imports. Bundled as they
+    // come, two small files it imports would land in the chunk with all of Excalidraw, which a worker
+    // can't run, and the work would fall back to the page. Each gets a chunk of its own.
+    config() {
+      return {
+        build: {
+          rolldownOptions: {
+            output: {
+              codeSplitting: {
+                groups: workerFiles().map((file) => ({
+                  name: `excalidraw-${file.replace(/\.js$/, '')}`,
+                  test: new RegExp(`[\\\\/]@excalidraw[\\\\/]excalidraw[\\\\/]dist[\\\\/]prod[\\\\/]${escapeRegExp(file)}(?:\\?|$)`),
+                  includeDependenciesRecursively: false,
+                })),
+              },
+            },
+          },
+        },
+      };
+    },
     configResolved(config) {
       outDir = path.resolve(config.root, config.build.outDir);
       base = config.base;
