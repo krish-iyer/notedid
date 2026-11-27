@@ -2032,19 +2032,45 @@ input.date-input {
   }
 }
 
+/* A paper on a narrower screen: the PDF above, its comments, review notes or history below (or folded into the
+   strip). The page is exactly the screen's height and doesn't scroll itself, only the PDF and the pane do: so it
+   doesn't move under your finger, and the browser's address bar doesn't come and go. */
 @media (max-width: 900px) {
-  .paper-page {
+  .app:has(.paper-page:not(.embedded)) {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .app:has(.paper-page:not(.embedded)) .sidebar {
+    height: 100%;
+  }
+
+  .content:has(> .paper-page:not(.embedded)) {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .paper-page:not(.embedded) {
+    flex: 1;
+    min-height: 0;
     height: auto;
   }
 
   .paper-split {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
   }
 
   .paper-pdf {
-    height: 75vh;
     border-right: none;
     border-bottom: 1px solid var(--line);
+  }
+
+  .paper-side-body {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
   }
 
   .vault-open {
@@ -2836,11 +2862,20 @@ button.tag-chip:hover:not(:disabled) {
 @media (max-width: 900px) {
   .paper-split.side-hidden {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
   }
 
   .paper-side-strip {
     flex-direction: row;
     justify-content: center;
+    gap: 18px;
+    padding: 6px 0 calc(env(safe-area-inset-bottom, 0px) + 6px);
+    border-top: 1px solid var(--line);
+  }
+
+  .paper-side-strip .icon-button {
+    min-width: 44px;
+    min-height: 40px;
   }
 }
 
@@ -4340,6 +4375,18 @@ button.tag-chip:hover:not(:disabled) {
   .note-head .meta .path {
     display: none;
   }
+  .paper-head {
+    padding: 8px 16px 8px;
+  }
+  .paper-head .title-row h1 {
+    font-size: 1.15rem;
+  }
+  .paper-head .paper-sub p {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
 }
 
 /* ---- Phone width: the menu for a selection, and the comment box, along the screen's edges ---- */

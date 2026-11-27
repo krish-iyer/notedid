@@ -62,3 +62,15 @@ export function splitHighlights(text: string): { text: string; hit: boolean }[] 
   if (last < text.length) parts.push({ text: text.slice(last), hit: false });
   return parts;
 }
+
+/**
+ * Scrolls `container` just enough to show `el`, smoothly. Unlike el.scrollIntoView(), it never scrolls the page
+ * or anything else around the container.
+ */
+export function scrollIntoContainer(el: Element, container: Element): void {
+  const box = el.getBoundingClientRect();
+  const view = container.getBoundingClientRect();
+  const margin = 8;
+  if (box.top < view.top + margin) container.scrollBy({ top: box.top - view.top - margin, behavior: 'smooth' });
+  else if (box.bottom > view.bottom - margin) container.scrollBy({ top: Math.min(box.bottom - view.bottom + margin, box.top - view.top - margin), behavior: 'smooth' });
+}

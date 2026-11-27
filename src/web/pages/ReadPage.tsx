@@ -62,7 +62,10 @@ export function ReadPage({ path }: { path: string }) {
   const commentsPath = commentsPathFor(path);
   const { data: doc, error } = useLiveData(() => fetchNote(path), [path]);
   const { data: commentsDoc, reload } = useLiveData(() => fetchNote(commentsPath), [commentsPath]);
-  const comments: DocComment[] = useMemo(() => parseComments(commentsDoc?.content ?? ''), [commentsDoc]);
+  // By their text: both load again whenever any note changes, mostly unchanged.
+  const content = doc?.content ?? '';
+  const commentsText = commentsDoc?.content ?? '';
+  const comments: DocComment[] = useMemo(() => parseComments(commentsText), [commentsText]);
   const article = useRef<HTMLElement>(null);
   const popover = useRef<HTMLDivElement>(null);
   const sheet = useMediaQuery(PHONE);
@@ -71,14 +74,22 @@ export function ReadPage({ path }: { path: string }) {
   const [writing, setWriting] = useState(false);
   const [active, setActive] = useState<number | null>(null);
 
-  // The note as HTML (cards drawn as cards), then its commented passages marked.
+  // The note as HTML, cards drawn as cards. Drawn again only when its text changes: drawing it again loads its
+  // images and cards again, which moves the page about while they load.
   useLayoutEffect(() => {
     const el = article.current;
     if (!el) return;
-    const content = doc?.content ?? '';
     renderWithCards(el, content.slice(splitFrontmatter(content).bodyOffset), { notePath: path, privateMode: false });
+  }, [content, path]);
+
+  // Its commented passages, marked (anew when a comment is added).
+  useLayoutEffect(() => {
+    const el = article.current;
+    if (!el) return;
+    for (const mark of el.querySelectorAll('mark.comment-mark')) mark.replaceWith(...mark.childNodes);
+    el.normalize();
     comments.forEach((c, i) => markQuote(el, c.quote, i));
-  }, [doc, path, comments]);
+  }, [content, path, comments]);
 
   /** The passage selected in the note, and where it is in the note; null if none. */
   const selected = useCallback((): { quote: string; x: number; below: number; above: number } | null => {

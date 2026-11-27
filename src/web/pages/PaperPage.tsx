@@ -16,7 +16,7 @@ import { type PdfAnnotation, PdfViewer, type PdfSelection, type PdfViewerHandle 
 import { encodeNotePath, Link } from '../router.ts';
 import { refreshNotes, useNote, useNotesLoaded } from '../stores.ts';
 import { showToast } from '../toast.ts';
-import { dirname, messageOf, randomId } from '../util.ts';
+import { dirname, messageOf, randomId, scrollIntoContainer } from '../util.ts';
 
 function stemOf(path: string): string {
   return (path.split('/').pop() ?? path).replace(/\.md$/i, '');
@@ -206,8 +206,11 @@ export function PaperPage({ path, page, highlight, embedded = false }: { path: s
     void loadHighlights().catch(() => undefined);
   }, [loadHighlights]);
 
+  // The active comment, scrolled into view in its pane (and only there: never the page, the PDF or the window).
   useEffect(() => {
-    if (active) document.getElementById(`comment-${active}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const card = active ? document.getElementById(`comment-${active}`) : null;
+    const pane = card?.closest('.paper-side-body');
+    if (card && pane) scrollIntoContainer(card, pane);
   }, [active, tab]);
 
   /** Changes the highlight positions and saves them, reloading and retrying if they changed elsewhere. */
@@ -323,6 +326,8 @@ export function PaperPage({ path, page, highlight, embedded = false }: { path: s
     else setSideHiddenSaved(true);
   };
 
+  // The split is there unless the paper isn't found, so it is watched again once the paper is (useNote gives null
+  // until then: just after the example notes are added, say).
   useEffect(() => {
     const el = split.current;
     if (!el) return;
@@ -333,7 +338,7 @@ export function PaperPage({ path, page, highlight, embedded = false }: { path: s
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [loaded, note === undefined]);
+  }, [loaded, note === null]);
 
   const showHighlight = (h: Highlight) => {
     showSide('comments');
@@ -508,7 +513,7 @@ export function PaperPage({ path, page, highlight, embedded = false }: { path: s
               <Icon name="history" size={15} /> <span className="tab-label">History</span>
             </button>
             <button type="button" className="icon-button side-hide" title="Hide comments and notes (more room for the PDF)" aria-label="Hide the comments and notes" onClick={hideSide}>
-              <Icon name="sideClose" size={16} />
+              <Icon name={narrow ? 'close' : 'sideClose'} size={16} />
             </button>
           </div>
           <div className="paper-side-body comments-pane" hidden={tab !== 'comments'}>
