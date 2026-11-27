@@ -3497,6 +3497,9 @@ button.tag-chip:hover:not(:disabled) {
   contain: inline-size;
   /* Padding, not margins: the editor measures a widget's height without its margins. */
   padding: 6px 0 4px;
+  /* Words stay whole (the editor's own lines break anywhere): on a phone, a table too wide scrolls sideways. */
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .cm-md-table-scroll {
@@ -3529,6 +3532,7 @@ button.tag-chip:hover:not(:disabled) {
   padding: 5px 10px;
   outline: none;
   white-space: pre-wrap;
+  word-break: normal;
   overflow-wrap: break-word;
   cursor: text;
 }
@@ -4300,4 +4304,40 @@ button.tag-chip:hover:not(:disabled) {
   flex-wrap: wrap;
   gap: 0.5em;
   align-items: center;
+}
+
+/* ---- Phones and tablets: nothing to hover with ---- */
+@media (hover: none) {
+  /* Controls that wait for a hover are always there. */
+  .cm-md-table-bar,
+  .cm-quote-fold,
+  .pdf-comment-tools {
+    opacity: 1;
+  }
+  .nav-sub-row .remove,
+  .cm-card .cm-card-unlink {
+    visibility: visible;
+  }
+  .card-tools {
+    display: flex;
+  }
+  .cm-card .cm-card-attach-button {
+    color: var(--muted);
+  }
+  /* Keyboard hints and mouse instructions mean nothing on a touch screen. */
+  .switcher-footer,
+  #switcher-list kbd,
+  .library-hint {
+    display: none;
+  }
+}
+
+/* ---- Phone width: headers take less room ---- */
+@media (max-width: 600px) {
+  .note-head h1 {
+    font-size: 1.4rem;
+  }
+  .note-head .meta .path {
+    display: none;
+  }
 }
