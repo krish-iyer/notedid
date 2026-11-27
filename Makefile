@@ -5,7 +5,7 @@
 #   make browser-dist  build the browser-only app into dist/browser, to host anywhere (BASE_PATH=/folder/ for a folder)
 #   make lan      serve the browser-only app on your network over HTTPS, for your phone (make lan-stop stops it)
 #   make apk      build the Android app into dist/notedid.apk
-#   make desktop  build the desktop app into dist/desktop/ (Linux .deb and AppImage, Windows installer)
+#   make desktop  build the desktop app into dist/desktop/ (Linux .deb and AppImage, Windows installer, macOS zips)
 #   make start    start the app in the background; `make logs` follows its output
 #   make down     stop and remove the app container
 #   make check    type-check, run the tests and build
@@ -89,7 +89,7 @@ apk: $(DEPS) | $(SETUP)
 	$(COMPOSE) --profile android run --rm android sh scripts/build-apk.sh
 	@test ! -d .lan/public || { cp dist/notedid.apk .lan/public/notedid.apk && echo "make lan's page offers it now too."; }
 
-# The desktop app (Electron): DESKTOP=--linux (or --win) builds one of them. macOS: DESKTOP=--mac (README.md).
+# The desktop app (Electron): DESKTOP=--linux (or --win, --mac) builds one of them.
 DESKTOP ?=
 desktop: $(DEPS) | $(SETUP)
 	$(COMPOSE) --profile desktop run --rm desktop sh scripts/build-desktop.sh $(DESKTOP)

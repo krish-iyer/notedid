@@ -1,9 +1,8 @@
 #!/bin/sh
 # Builds the desktop app (make desktop) into dist/desktop/: the web client and the server's code in
 # Electron. Runs in the desktop container.
-#   sh scripts/build-desktop.sh            Linux (AppImage, .deb) and Windows (installer)
-#   sh scripts/build-desktop.sh --linux    some of them (electron-builder's options); --mac for the
-#                                          macOS zips, which aren't signed (README.md)
+#   sh scripts/build-desktop.sh            all of them: Linux (AppImage, .deb), Windows (installer), macOS (zips)
+#   sh scripts/build-desktop.sh --linux    some of them (electron-builder's options)
 #   sh scripts/build-desktop.sh app        only the app's folder, dist/desktop-app, to run with Electron as it is
 set -eu
 
@@ -33,7 +32,7 @@ JSON
 echo "$APP: notedid $VERSION"
 [ "${1:-}" = app ] && exit 0
 
-[ $# -gt 0 ] || set -- --linux --win
+[ $# -gt 0 ] || set -- --linux --win --mac
 # The Windows installer's build runs a Windows program in Wine, which needs a settings folder of its own.
 [ -z "${WINEPREFIX:-}" ] || mkdir -p "$WINEPREFIX"
 npx electron-builder --config desktop/electron-builder.yml --publish never "$@"

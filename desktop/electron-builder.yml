@@ -43,5 +43,6 @@ mac:
   icon: dist/desktop-app/icon.png
   category: public.app-category.productivity
   artifactName: notedid-${version}-mac-${arch}.${ext}
-  # Not signed (README.md): a Mac doesn't open it as it is.
+  # No Apple certificate: signed ad hoc instead, by desktop/sign-mac.cjs (README.md).
   identity: null
+afterPack: desktop/sign-mac.cjs

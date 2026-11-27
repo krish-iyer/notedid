@@ -51,10 +51,17 @@ RUN dpkg --add-architecture i386 \
  && apt-get update \
  && apt-get install -y --no-install-recommends libgtk-3-0t64 libnss3 libgbm1 libasound2t64 libxss1 libxtst6 libatk-bridge2.0-0t64 \
       libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libcups2t64 libsecret-1-0 xvfb xauth xdotool fonts-dejavu-core binutils xz-utils \
-      wine wine64 wine32:i386 \
+      wine wine64 wine32:i386 curl \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir -p /cache/electron \
  && chmod 1777 /cache/electron
+# rcodesign signs the macOS app ad hoc (without an Apple certificate): an Apple Silicon Mac runs
+# nothing unsigned, and Apple's own codesign only runs on a Mac. Pinned by its published checksum.
+RUN curl -fsSL -o /tmp/rcodesign.tar.gz https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.29.0/apple-codesign-0.29.0-x86_64-unknown-linux-musl.tar.gz \
+ && echo "dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002  /tmp/rcodesign.tar.gz" | sha256sum -c - \
+ && tar -xzf /tmp/rcodesign.tar.gz -C /tmp \
+ && install -m 755 /tmp/apple-codesign-0.29.0-x86_64-unknown-linux-musl/rcodesign /usr/local/bin/rcodesign \
+ && rm -rf /tmp/rcodesign.tar.gz /tmp/apple-codesign-0.29.0-x86_64-unknown-linux-musl
 # Wine keeps its settings in a folder of the user the container runs as (scripts/build-desktop.sh makes it).
 ENV ELECTRON_CACHE=/cache/electron/electron \
     ELECTRON_BUILDER_CACHE=/cache/electron/builder \
